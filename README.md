@@ -227,7 +227,6 @@ Sync Agents  →  Sync Calls  →  Analyze Transcripts  →  Synthesize Insights
 
 ### Mocked / Not Production-Ready
 
-- The `/dashboard` endpoint and `observabilityService` use a static rule-based analysis pipeline — this is a prototype remnant not used by the main UI. The primary UI path goes through `GET /agents/:id/workspace`
 - No webhook-based real-time ingestion — calls are synced on demand via the UI. The manual sync button exists for development and debugging purposes. In a production setup this would be replaced by a webhook-driven queue: HighLevel pushes call events to a webhook endpoint, the backend enqueues each event (e.g. SQS, BullMQ), and a worker processes calls from the queue — eliminating the need to poll on demand.
 - Currently monitoring agents for a single location only — the `locationId` is hardcoded on the frontend. In a production setup this would be dynamic, supporting multiple locations per account with the active location resolved from the HighLevel embedded app context.
 - Using a synchronous request-response mechanism for all processing (KPI derivation, transcript evaluation, synthesis) instead of a queue-based pipeline. For this assignment calls are processed inline during the API request. In production, each step would be pushed to a job queue and processed asynchronously by workers, preventing timeouts on large call volumes and enabling retries on failure.
