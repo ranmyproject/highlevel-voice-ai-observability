@@ -100,7 +100,7 @@ watch(syncingCalls, (newVal, oldVal) => {
 
 watch(analyzing, (newVal, oldVal) => {
   if (oldVal && !newVal && !error.value && workspace.value) {
-    const count = workspace.value.calls.filter((c) => c.evaluation).length;
+    const count = workspace.value.evaluations.length;
     showToast(`Analyzed ${count} transcript${count === 1 ? "" : "s"} for ${workspace.value.agent.name}`);
   }
 });

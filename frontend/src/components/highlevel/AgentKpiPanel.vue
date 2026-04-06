@@ -409,7 +409,7 @@ function addCustomKpi(): void {
               class="rounded-md bg-white px-3 py-2"
             >
               <div class="flex items-center justify-between">
-                <span class="text-sm text-slate-600">{{ kpi.label }}</span>
+                <span class="text-sm text-slate-600">{{ kpi.kpi }}</span>
                 <span class="text-sm font-semibold" :class="issueRateClass(issueRate(kpi))">
                   {{ issueRate(kpi) }}% issues
                 </span>
@@ -450,22 +450,10 @@ function addCustomKpi(): void {
         <div class="rounded-lg bg-slate-50 p-5">
           <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Add Manual KPI</p>
           <div class="mt-3 space-y-2">
-            <input
-              v-model="customKpiDraft.label"
-              type="text"
-              placeholder="KPI label"
-              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500"
-            />
             <textarea
-              v-model="customKpiDraft.description"
-              rows="2"
-              placeholder="What should this KPI measure?"
-              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500"
-            />
-            <textarea
-              v-model="customKpiDraft.successSignal"
-              rows="2"
-              placeholder="What transcript evidence counts as success?"
+              v-model="customKpiDraft.kpi"
+              rows="3"
+              placeholder="Plain English statement of what a good call should do or avoid"
               class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500"
             />
             <button

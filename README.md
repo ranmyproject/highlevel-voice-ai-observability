@@ -2,6 +2,8 @@
 
 An Agent Observability Copilot built as a HighLevel Marketplace app that automates the **Monitor** and **Analyze** phases for Voice AI agents. It eliminates manual transcript auditing by running a continuous validation flywheel — ingesting calls from HighLevel, scoring them against agent-specific KPIs derived from the agent's own script, and surfacing actionable prompt-level recommendations inside the HighLevel interface.
 
+**Live Demo:** [https://ghl-observability.vercel.app/](https://ghl-observability.vercel.app/)
+
 ---
 
 ## Architecture
@@ -227,7 +229,7 @@ Sync Agents  →  Sync Calls  →  Analyze Transcripts  →  Synthesize Insights
 
 - The `/dashboard` endpoint and `observabilityService` use a static rule-based analysis pipeline — this is a prototype remnant not used by the main UI. The primary UI path goes through `GET /agents/:id/workspace`
 - `POST /calls/ingest` uses the old analysis path (not LLM evaluation) — kept for testing purposes only
-- No webhook-based real-time ingestion — calls are synced on demand via the UI
+- No webhook-based real-time ingestion — calls are synced on demand via the UI. The manual sync button exists for development and debugging purposes. In a production setup this would be replaced by a webhook-driven queue: HighLevel pushes call events to a webhook endpoint, the backend enqueues each event (e.g. SQS, BullMQ), and a worker processes calls from the queue — eliminating the need to poll on demand.
 
 ---
 
