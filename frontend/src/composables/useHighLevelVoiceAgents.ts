@@ -11,6 +11,7 @@ import { formatRelativeSyncTime } from "../utils/format";
 
 export function useHighLevelVoiceAgents() {
   const loading = ref(true);
+  const firstTimeSync = ref(false);
   const syncingAgents = ref(false);
   const dashboardIssues = ref<DashboardIssueFeedItem[]>([]);
   const syncingCalls = ref(false);
@@ -152,6 +153,8 @@ export function useHighLevelVoiceAgents() {
   onMounted(async () => {
     loading.value = true;
     error.value = "";
+    firstTimeSync.value = sessionStorage.getItem("ghl_first_sync") === "true";
+    sessionStorage.removeItem("ghl_first_sync");
 
     try {
       await loadSavedAgents();
@@ -160,11 +163,13 @@ export function useHighLevelVoiceAgents() {
       error.value = loadError instanceof Error ? loadError.message : "Failed to load agents";
     } finally {
       loading.value = false;
+      firstTimeSync.value = false;
     }
   });
 
   return {
     loading,
+    firstTimeSync,
     dashboardIssues,
     syncingAgents,
     syncingCalls,

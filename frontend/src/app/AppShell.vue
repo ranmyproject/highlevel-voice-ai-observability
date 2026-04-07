@@ -20,6 +20,7 @@ const router = useRouter();
 
 const {
   loading,
+  firstTimeSync,
   dashboardIssues,
   syncingAgents,
   syncingCalls,
@@ -122,8 +123,28 @@ const navAgentName = computed(() =>
   />
 
   <main class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-    <!-- Loading skeleton -->
-    <div v-if="loading" class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <!-- First-time sync loading -->
+    <div v-if="loading && firstTimeSync" class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div class="flex flex-col items-center justify-center px-6 py-20 text-center">
+        <div class="relative mb-6 flex h-16 w-16 items-center justify-center">
+          <div class="absolute h-16 w-16 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
+          <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+          </svg>
+        </div>
+        <p class="text-base font-semibold text-slate-800">Syncing your agents</p>
+        <p class="mt-1.5 max-w-xs text-sm text-slate-500">
+          We're fetching your voice agents and deriving their KPI profiles for the first time. This usually takes 10–20 seconds.
+        </p>
+        <div class="mt-6 flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-xs font-medium text-blue-700">
+          <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+          Setting up your workspace…
+        </div>
+      </div>
+    </div>
+
+    <!-- Regular loading skeleton -->
+    <div v-else-if="loading" class="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div class="px-6 py-6 sm:px-8">
         <div class="h-10 w-48 animate-pulse rounded-xl bg-slate-200" />
         <div class="mt-4 flex gap-3">

@@ -38,6 +38,7 @@ onMounted(async () => {
 
     localStorage.setItem("ghl_location_id", locationId);
     localStorage.setItem("ghl_token", token);
+    sessionStorage.setItem("ghl_first_sync", "true");
     router.replace("/");
   } catch {
     errorMessage.value = "Could not connect to the server. Please check your connection and try again.";
