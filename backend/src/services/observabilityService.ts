@@ -4,16 +4,11 @@ import type {
   AgentAnalysis,
   DashboardResponse,
   IngestTranscriptRequestBody,
-  StoredAgent,
   Transcript
 } from "../types.js";
 import { analyzeAgent, analyzeTranscript, buildDashboard } from "./analysisService.js";
 
 class ObservabilityService {
-  async listAgents(locationId: string): Promise<StoredAgent[]> {
-    return agentRepository.findByLocationId(locationId);
-  }
-
   async getDashboard(locationId: string): Promise<DashboardResponse> {
     const [agents, transcripts] = await Promise.all([
       agentRepository.findByLocationId(locationId),

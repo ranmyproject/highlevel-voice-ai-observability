@@ -6,7 +6,6 @@ import { logger } from "../utils/logger.js";
 import {
   AgentDetail,
   AgentListItem,
-  AgentListResponse,
   StoredAgent
 } from "../types.js";
 
@@ -204,56 +203,6 @@ class AgentService {
     return validResults;
   }
 
-  async listAgents(locationId: string): Promise<AgentListResponse> {
-    logger.info("AgentService", "listAgents called", { locationId });
-
-    const agents = await agentRepository.findByLocationId(locationId);
-
-    logger.info("AgentService", "listAgents returning agents from DB", { count: agents.length, locationId });
-
-    return {
-      locationId,
-      syncedAt: agents[0]?.syncedAt || "",
-      count: agents.length,
-      agents
-    };
-  }
-
-  async getAgent(agentId: string, locationId: string): Promise<StoredAgent | null> {
-    logger.info("AgentService", "getAgent called", { agentId, locationId });
-
-    const result = await agentRepository.findOne(locationId, agentId);
-    logger.debug("AgentService", "getAgent result", { agentId, found: result !== null });
-    return result;
-  }
-
-  async refreshAgent(agentId: string, locationId: string): Promise<StoredAgent> {
-    logger.info("AgentService", "refreshAgent started", { agentId, locationId });
-
-    const tokenRecord = await authService.getValidToken(locationId);
-    const existingAgent = await agentRepository.findOne(locationId, agentId);
-    if (!existingAgent) {
-      throw new HttpError(404, "Stored HighLevel voice agent not found");
-    }
-
-    const detailPayload = await this.requestJson<AgentDetail>(
-      `/voice-ai/agents/${agentId}`,
-      locationId
-    );
-
-    const normalized = this.normalizeAgent(
-      locationId,
-      tokenRecord.companyId,
-      existingAgent.listPayload,
-      detailPayload
-    );
-
-    // This method is used for manual refreshes — but we keep the KPI derivation out of here 
-    // and let the controller handle it if needed, or if it's a deep refresh.
-
-    await agentRepository.upsertMany([normalized]);
-    return normalized;
-  }
 }
 
 export const agentService = new AgentService();

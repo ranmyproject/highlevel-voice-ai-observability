@@ -6,29 +6,18 @@ import { kpiRepository } from "../repositories/kpiRepository.js";
 import { agentService } from "../services/agentService.js";
 import { agentKpiDerivationService } from "../services/agentKpiDerivationService.js";
 import { observabilityService } from "../services/observabilityService.js";
+import type { StoredAgent } from "../types.js";
 
 const BATCH_SIZE = 10;
 
-export async function syncAgents(
-  request: Request,
-  response: Response
-): Promise<void> {
-  const locationId = request.locationId;
-
-  // 1. Fetch all agents from HL API (list + detail for each)
+async function performSync(locationId: string): Promise<StoredAgent[]> {
   const fetchResults = await agentService.fetchAgents(locationId);
 
-  // 2. Load existing agents from DB for change detection
   const existingAgents = await agentRepository.findByLocationId(locationId);
   const existingMap = new Map(existingAgents.map((a) => [a.id, a]));
 
-  // 3. Save all fetched agents to DB immediately with their raw HL data
   await agentRepository.upsertMany(fetchResults.map((r) => r.agent));
 
-  // 4. Determine which agents need KPI derivation:
-  //    - new agents not yet in DB
-  //    - agents whose HL updatedAt has changed
-  //    - agents already in DB but with missing/empty derivedProfile (e.g. prior LLM failure)
   const agentsToUpdate = fetchResults.filter(({ listItem, agent }) => {
     const existing = existingMap.get(agent.id);
     const hlUpdatedAt = typeof listItem.updatedAt === "string" ? listItem.updatedAt : "";
@@ -38,7 +27,6 @@ export async function syncAgents(
     return isNew || isChanged || isIncomplete;
   });
 
-  // 5. Derive KPIs in batches of 10 — parallel within each batch, sequential across batches
   for (let i = 0; i < agentsToUpdate.length; i += BATCH_SIZE) {
     const batch = agentsToUpdate.slice(i, i + BATCH_SIZE);
 
@@ -66,7 +54,6 @@ export async function syncAgents(
       })
     );
 
-    // Persist blueprints and enriched agents for this batch in parallel
     await Promise.all([
       ...batchResults.map(({ agent, derived }) =>
         kpiRepository.upsert({
@@ -82,13 +69,20 @@ export async function syncAgents(
     ]);
   }
 
-  const allAgents = await agentRepository.findByLocationId(locationId);
+  return agentRepository.findByLocationId(locationId);
+}
+
+export async function syncAgents(
+  request: Request,
+  response: Response
+): Promise<void> {
+  const agents = await performSync(request.locationId);
 
   response.status(200).json({
-    locationId,
+    locationId: request.locationId,
     syncedAt: new Date().toISOString(),
-    count: allAgents.length,
-    agents: allAgents
+    count: agents.length,
+    agents
   });
 }
 
@@ -98,7 +92,11 @@ export async function listAgents(
 ): Promise<void> {
   const locationId = request.locationId;
 
-  const agents = await agentRepository.findByLocationId(locationId);
+  let agents = await agentRepository.findByLocationId(locationId);
+
+  if (agents.length === 0) {
+    agents = await performSync(locationId);
+  }
 
   response.json({
     locationId,

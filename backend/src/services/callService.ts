@@ -18,6 +18,7 @@ import { logger } from "../utils/logger.js";
 import type {
   AgentAggregates,
   AgentAnalysisWorkspace,
+  AgentFeedbackCycle,
   AgentKpiAggregate,
   AgentKpiItem,
   AgentRecommendation,
@@ -265,48 +266,34 @@ class CallService {
     return calls;
   }
 
-  async listCalls(locationId?: string, agentId?: string): Promise<VoiceCallListResponse> {
-    const tokenRecord = await authService.getValidToken(locationId);
-    const resolvedLocationId = tokenRecord.locationId;
-
-    if (!resolvedLocationId) {
-      throw new HttpError(400, "No locationId available for HighLevel calls");
-    }
-
+  async listCalls(locationId: string, agentId?: string): Promise<VoiceCallListResponse> {
     const calls = agentId
-      ? await callRepository.findByAgentId(resolvedLocationId, agentId)
-      : await callRepository.findByLocationId(resolvedLocationId);
+      ? await callRepository.findByAgentId(locationId, agentId)
+      : await callRepository.findByLocationId(locationId);
 
     return {
-      locationId: resolvedLocationId,
+      locationId,
       syncedAt: calls[0]?.syncedAt || "",
       count: calls.length,
       calls
     };
   }
 
-  async analyzeCall(callId: string, locationId?: string): Promise<TranscriptEvaluation> {
+  async analyzeCall(callId: string, locationId: string): Promise<TranscriptEvaluation> {
     logger.info("CallService", "analyzeCall started", { callId, locationId });
 
-    const tokenRecord = await authService.getValidToken(locationId);
-    const resolvedLocationId = tokenRecord.locationId;
-
-    if (!resolvedLocationId) {
-      throw new HttpError(400, "No locationId available for transcript analysis");
-    }
-
-    const call = await callRepository.findOne(resolvedLocationId, callId);
+    const call = await callRepository.findOne(locationId, callId);
     if (!call) throw new HttpError(404, "Stored HighLevel call not found");
 
-    const agent = await agentRepository.findOne(resolvedLocationId, call.agentId);
+    const agent = await agentRepository.findOne(locationId, call.agentId);
     if (!agent) throw new HttpError(404, "Stored HighLevel agent not found for this call");
 
-    const blueprint = await kpiRepository.findByAgentId(resolvedLocationId, call.agentId);
+    const blueprint = await kpiRepository.findByAgentId(locationId, call.agentId);
     if (!blueprint || blueprint.kpis.length === 0) {
       throw new HttpError(400, "No KPI blueprint found for this agent. Sync agents first.");
     }
 
-    return this.evaluateCall(call, agent, blueprint.kpis, resolvedLocationId);
+    return this.evaluateCall(call, agent, blueprint.kpis, locationId);
   }
 
   private async evaluateCall(
@@ -341,20 +328,13 @@ class CallService {
 
   async analyzeAgentCalls(
     agentId: string,
-    locationId?: string
-  ): Promise<{ analyzedCount: number; evaluations: TranscriptEvaluation[]; feedbackCycle: import("../types.js").AgentFeedbackCycle }> {
+    locationId: string
+  ): Promise<{ analyzedCount: number; evaluations: TranscriptEvaluation[]; feedbackCycle: AgentFeedbackCycle }> {
     logger.info("CallService", "analyzeAgentCalls started", { agentId, locationId });
 
-    const tokenRecord = await authService.getValidToken(locationId);
-    const resolvedLocationId = tokenRecord.locationId;
-
-    if (!resolvedLocationId) {
-      throw new HttpError(400, "No locationId available for batch analysis");
-    }
-
     const [calls, agent] = await Promise.all([
-      callRepository.findByAgentId(resolvedLocationId, agentId),
-      agentRepository.findOne(resolvedLocationId, agentId)
+      callRepository.findByAgentId(locationId, agentId),
+      agentRepository.findOne(locationId, agentId)
     ]);
 
     if (!agent) throw new HttpError(404, "Stored HighLevel agent not found");
@@ -368,14 +348,14 @@ class CallService {
     await callMonitorRepository.upsertMany(monitorDecisions);
     await Promise.all(
       monitorDecisions.map((decision) =>
-        callRepository.writeMonitor(resolvedLocationId, decision.callId, decision)
+        callRepository.writeMonitor(locationId, decision.callId, decision)
       )
     );
 
     const callsToAnalyze = calls.filter((call) => call.monitor?.shouldAnalyze);
 
     // Fetch agent context once — shared across all calls in every batch
-    const blueprint = await kpiRepository.findByAgentId(resolvedLocationId, agentId);
+    const blueprint = await kpiRepository.findByAgentId(locationId, agentId);
     if (!blueprint || blueprint.kpis.length === 0) {
       throw new HttpError(400, "No KPI blueprint found for this agent. Sync agents first.");
     }
@@ -393,22 +373,22 @@ class CallService {
         total: callsToAnalyze.length
       });
       const batchResults = await Promise.all(
-        batch.map((call) => this.evaluateCall(call, agent, blueprint.kpis, resolvedLocationId))
+        batch.map((call) => this.evaluateCall(call, agent, blueprint.kpis, locationId))
       );
       evaluations.push(...batchResults);
     }
 
     const [storedCalls, storedEvaluations] = await Promise.all([
-      callRepository.findByAgentId(resolvedLocationId, agentId),
-      callEvaluationRepository.findByAgentId(resolvedLocationId, agentId)
+      callRepository.findByAgentId(locationId, agentId),
+      callEvaluationRepository.findByAgentId(locationId, agentId)
     ]);
 
     const aggregates = computeAggregates(storedEvaluations, storedCalls.length, blueprint.kpis);
-    await agentRepository.setAggregates(resolvedLocationId, agentId, aggregates);
+    await agentRepository.setAggregates(locationId, agentId, aggregates);
 
     const recommendations =
       aggregates.evaluatedCalls > 0 ? await agentSynthesisService.synthesize(agent, aggregates) : [];
-    await agentRepository.setRecommendations(resolvedLocationId, agentId, recommendations);
+    await agentRepository.setRecommendations(locationId, agentId, recommendations);
 
     const feedbackCycle = agentFeedbackFlywheelService.buildCycle(
       { ...agent, aggregates, recommendations },
@@ -417,27 +397,17 @@ class CallService {
       recommendations
     );
     await agentFeedbackCycleRepository.upsert(feedbackCycle);
-    await agentRepository.setLatestFeedbackCycle(resolvedLocationId, agentId, feedbackCycle);
+    await agentRepository.setLatestFeedbackCycle(locationId, agentId, feedbackCycle);
 
     logger.info("CallService", "analyzeAgentCalls completed", { agentId, analyzedCount: evaluations.length });
 
     return { analyzedCount: evaluations.length, evaluations, feedbackCycle };
   }
 
-  async synthesizeAgentInsights(
-    agentId: string,
-    locationId?: string
-  ): Promise<{ recommendations: AgentRecommendation[] }> {
+  async synthesizeAgentInsights(agentId: string, locationId: string): Promise<{ recommendations: AgentRecommendation[] }> {
     logger.info("CallService", "synthesizeAgentInsights started", { agentId, locationId });
 
-    const tokenRecord = await authService.getValidToken(locationId);
-    const resolvedLocationId = tokenRecord.locationId;
-
-    if (!resolvedLocationId) {
-      throw new HttpError(400, "No locationId available for synthesis");
-    }
-
-    const agent = await agentRepository.findOne(resolvedLocationId, agentId);
+    const agent = await agentRepository.findOne(locationId, agentId);
     if (!agent) throw new HttpError(404, "Stored HighLevel agent not found");
 
     if (!agent.aggregates || agent.aggregates.evaluatedCalls === 0) {
@@ -445,42 +415,29 @@ class CallService {
     }
 
     const recommendations = await agentSynthesisService.synthesize(agent, agent.aggregates);
-    await agentRepository.setRecommendations(resolvedLocationId, agentId, recommendations);
+    await agentRepository.setRecommendations(locationId, agentId, recommendations);
 
-    const monitors = await callMonitorRepository.findByAgentId(resolvedLocationId, agentId);
+    const monitors = await callMonitorRepository.findByAgentId(locationId, agentId);
     const feedbackCycle = agentFeedbackFlywheelService.buildCycle(
-      {
-        ...agent,
-        recommendations
-      },
+      { ...agent, recommendations },
       monitors,
       agent.aggregates,
       recommendations
     );
     await agentFeedbackCycleRepository.upsert(feedbackCycle);
-    await agentRepository.setLatestFeedbackCycle(resolvedLocationId, agentId, feedbackCycle);
+    await agentRepository.setLatestFeedbackCycle(locationId, agentId, feedbackCycle);
 
     logger.info("CallService", "synthesizeAgentInsights completed", { agentId, recommendationCount: recommendations.length });
 
     return { recommendations };
   }
 
-  async buildAgentWorkspace(
-    agentId: string,
-    locationId?: string
-  ): Promise<AgentAnalysisWorkspace> {
-    const tokenRecord = await authService.getValidToken(locationId);
-    const resolvedLocationId = tokenRecord.locationId;
-
-    if (!resolvedLocationId) {
-      throw new HttpError(400, "No locationId available for workspace");
-    }
-
+  async buildAgentWorkspace(agentId: string, locationId: string): Promise<AgentAnalysisWorkspace> {
     const [agent, calls, kpiBlueprint, evaluations] = await Promise.all([
-      agentRepository.findOne(resolvedLocationId, agentId),
-      callRepository.findByAgentId(resolvedLocationId, agentId),
-      kpiRepository.findByAgentId(resolvedLocationId, agentId),
-      callEvaluationRepository.findByAgentId(resolvedLocationId, agentId)
+      agentRepository.findOne(locationId, agentId),
+      callRepository.findByAgentId(locationId, agentId),
+      kpiRepository.findByAgentId(locationId, agentId),
+      callEvaluationRepository.findByAgentId(locationId, agentId)
     ]);
 
     if (!agent) throw new HttpError(404, "Stored HighLevel agent not found");

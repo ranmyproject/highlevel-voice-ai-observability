@@ -7,7 +7,6 @@ import { agentRepository } from "../repositories/agentRepository.js";
 import { callRepository } from "../repositories/callRepository.js";
 import { callMonitorRepository } from "../repositories/callMonitorRepository.js";
 import { callMonitoringService } from "../services/callMonitoringService.js";
-import { authService } from "../services/authService.js";
 import type { IngestTranscriptRequestBody } from "../types.js";
 
 function readAgentId(request: Request): string | undefined {
@@ -44,9 +43,6 @@ export async function syncCalls(
   const newCalls = fetchedCalls.filter((c) => !existingIds.has(c.id));
 
   if (newCalls.length > 0) {
-    // Run the monitor gate on each new call immediately at sync time so the
-    // decision is persisted and analysis can skip re-evaluation later.
-    const tokenRecord = await authService.getValidToken(locationId);
     const agent = await agentRepository.findOne(locationId, agentId);
 
 
