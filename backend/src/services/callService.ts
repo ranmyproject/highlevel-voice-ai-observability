@@ -351,8 +351,6 @@ class CallService {
 
     if (!agent) throw new HttpError(404, "Stored HighLevel agent not found");
 
-    logger.info("CallService", "analyzeAgentCalls processing calls", { agentId, callCount: calls.length });
-
     const monitorDecisions = calls.map((call) => {
       const decision = call.monitor ?? callMonitoringService.evaluateCall(call, agent);
       call.monitor = decision;
@@ -368,20 +366,28 @@ class CallService {
 
     const callsToAnalyze = calls.filter((call) => call.monitor?.shouldAnalyze);
 
-    // Evaluate only gated calls (sequential to avoid hammering the LLM API)
+    // Process in batches of 10 — parallel within each batch, sequential across batches
+    const BATCH_SIZE = 10;
     const evaluations: TranscriptEvaluation[] = [];
-    for (const call of callsToAnalyze) {
-      const evaluation = await this.analyzeCall(call.id, resolvedLocationId);
-      evaluations.push(evaluation);
+
+    for (let i = 0; i < callsToAnalyze.length; i += BATCH_SIZE) {
+      const batch = callsToAnalyze.slice(i, i + BATCH_SIZE);
+      logger.info("CallService", `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}`, {
+        agentId,
+        batchSize: batch.length,
+        total: callsToAnalyze.length
+      });
+      const batchResults = await Promise.all(
+        batch.map((call) => this.analyzeCall(call.id, resolvedLocationId))
+      );
+      evaluations.push(...batchResults);
     }
 
-    // Compute and persist aggregates in one write
     const blueprint = await kpiRepository.findByAgentId(resolvedLocationId, agentId);
     const storedCalls = await callRepository.findByAgentId(resolvedLocationId, agentId);
     const storedEvaluations = await callEvaluationRepository.findByAgentId(resolvedLocationId, agentId);
 
     const aggregates = computeAggregates(storedEvaluations, storedCalls.length, blueprint?.kpis ?? []);
-
     await agentRepository.setAggregates(resolvedLocationId, agentId, aggregates);
 
     const recommendations =
@@ -389,11 +395,7 @@ class CallService {
     await agentRepository.setRecommendations(resolvedLocationId, agentId, recommendations);
 
     const feedbackCycle = agentFeedbackFlywheelService.buildCycle(
-      {
-        ...agent,
-        aggregates,
-        recommendations
-      },
+      { ...agent, aggregates, recommendations },
       monitorDecisions,
       aggregates,
       recommendations

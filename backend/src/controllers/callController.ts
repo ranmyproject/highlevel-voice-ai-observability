@@ -10,11 +10,6 @@ import { callMonitoringService } from "../services/callMonitoringService.js";
 import { authService } from "../services/authService.js";
 import type { IngestTranscriptRequestBody } from "../types.js";
 
-function readLocationId(request: Request): string | undefined {
-  const value = request.query.locationId;
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
 function readAgentId(request: Request): string | undefined {
   const value = request.query.agentId;
   return typeof value === "string" && value.length > 0 ? value : undefined;
@@ -25,12 +20,8 @@ export async function syncCalls(
   request: Request,
   response: Response
 ): Promise<void> {
-  const locationId = readLocationId(request);
+  const locationId = request.locationId;
   const agentId = readAgentId(request);
-
-  if (!locationId) {
-    throw new HttpError(400, "locationId is required for call sync");
-  }
 
   if (!agentId) {
     throw new HttpError(400, "agentId is required for call sync");
@@ -85,7 +76,7 @@ export async function listCalls(
   response: Response
 ): Promise<void> {
   const result = await callService.listCalls(
-    readLocationId(request),
+    request.locationId,
     readAgentId(request)
   );
   response.json(result);
@@ -97,7 +88,7 @@ export async function analyzeCall(
 ): Promise<void> {
   const result = await callService.analyzeCall(
     String(request.params.callId),
-    readLocationId(request)
+    request.locationId
   );
   response.json(result);
 }
@@ -108,7 +99,7 @@ export async function analyzeAgentCalls(
 ): Promise<void> {
   const result = await callService.analyzeAgentCalls(
     String(request.params.agentId),
-    readLocationId(request)
+    request.locationId
   );
   response.json(result);
 }
@@ -119,7 +110,7 @@ export async function getAgentWorkspace(
 ): Promise<void> {
   const result = await callService.buildAgentWorkspace(
     String(request.params.agentId),
-    readLocationId(request)
+    request.locationId
   );
   response.json(result);
 }
@@ -130,7 +121,7 @@ export async function synthesizeAgentInsights(
 ): Promise<void> {
   const result = await callService.synthesizeAgentInsights(
     String(request.params.agentId),
-    readLocationId(request)
+    request.locationId
   );
   response.json(result);
 }
@@ -140,13 +131,7 @@ export async function ingestCall(
   response: Response
 ): Promise<void> {
   try {
-    const locationId = readLocationId(request);
-
-    if (!locationId) {
-      throw new HttpError(400, "locationId is required for call ingestion");
-    }
-
-    const result = await observabilityService.ingestTranscript(locationId, request.body);
+    const result = await observabilityService.ingestTranscript(request.locationId, request.body);
     response.status(201).json(result);
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "Unknown agentId for this location") {

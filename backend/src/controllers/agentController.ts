@@ -7,20 +7,13 @@ import { agentService } from "../services/agentService.js";
 import { agentKpiDerivationService } from "../services/agentKpiDerivationService.js";
 import { observabilityService } from "../services/observabilityService.js";
 
-function readLocationId(request: Request): string | undefined {
-  const value = request.query.locationId;
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
+const BATCH_SIZE = 10;
 
 export async function syncAgents(
   request: Request,
   response: Response
 ): Promise<void> {
-  const locationId = readLocationId(request);
-
-  if (!locationId) {
-    throw new HttpError(400, "locationId is required for agent sync");
-  }
+  const locationId = request.locationId;
 
   // 1. Fetch all agents from HL API (list + detail for each)
   const fetchResults = await agentService.fetchAgents(locationId);
@@ -29,7 +22,10 @@ export async function syncAgents(
   const existingAgents = await agentRepository.findByLocationId(locationId);
   const existingMap = new Map(existingAgents.map((a) => [a.id, a]));
 
-  // 3. Determine which agents need KPI derivation:
+  // 3. Save all fetched agents to DB immediately with their raw HL data
+  await agentRepository.upsertMany(fetchResults.map((r) => r.agent));
+
+  // 4. Determine which agents need KPI derivation:
   //    - new agents not yet in DB
   //    - agents whose HL updatedAt has changed
   //    - agents already in DB but with missing/empty derivedProfile (e.g. prior LLM failure)
@@ -42,43 +38,48 @@ export async function syncAgents(
     return isNew || isChanged || isIncomplete;
   });
 
-  if (agentsToUpdate.length > 0) {
-    // 4. Derive KPIs only for new/changed agents.
-    //    deriveAgentKpis skips the LLM internally if metadataFingerprint is unchanged.
-    for (const { agent } of agentsToUpdate) {
-      const existingAgent = existingMap.get(agent.id) ?? null;
+  // 5. Derive KPIs in batches of 10 — parallel within each batch, sequential across batches
+  for (let i = 0; i < agentsToUpdate.length; i += BATCH_SIZE) {
+    const batch = agentsToUpdate.slice(i, i + BATCH_SIZE);
 
-      // Load existing KPI blueprint from its own collection for fingerprint cache check
-      const existingBlueprint = existingAgent
-        ? await kpiRepository.findByAgentId(agent.locationId, agent.id)
-        : null;
+    const batchResults = await Promise.all(
+      batch.map(async ({ agent }) => {
+        const existingAgent = existingMap.get(agent.id) ?? null;
+        const existingBlueprint = existingAgent
+          ? await kpiRepository.findByAgentId(agent.locationId, agent.id)
+          : null;
 
-      const derived = await agentKpiDerivationService.deriveAgentKpis(
-        agent.detailPayload,
-        agent.listPayload,
-        existingAgent,
-        existingBlueprint?.kpis
-      );
+        const derived = await agentKpiDerivationService.deriveAgentKpis(
+          agent.detailPayload,
+          agent.listPayload,
+          existingAgent,
+          existingBlueprint?.kpis
+        );
 
-      agent.goal = derived.goal;
-      agent.derivedProfile = derived.derivedProfile;
-      agent.kpiGeneratedAt = derived.kpiGeneratedAt;
-      agent.kpiGenerationSource = derived.kpiGenerationSource;
-      agent.metadataFingerprint = derived.metadataFingerprint;
+        agent.goal = derived.goal;
+        agent.derivedProfile = derived.derivedProfile;
+        agent.kpiGeneratedAt = derived.kpiGeneratedAt;
+        agent.kpiGenerationSource = derived.kpiGenerationSource;
+        agent.metadataFingerprint = derived.metadataFingerprint;
 
-      // Persist KPI blueprint to its own collection
-      await kpiRepository.upsert({
-        agentId: agent.id,
-        locationId: agent.locationId,
-        kpis: derived.kpis,
-        generatedAt: derived.kpiGeneratedAt,
-        source: "llm",
-        metadataFingerprint: derived.metadataFingerprint
-      });
-    }
+        return { agent, derived };
+      })
+    );
 
-    // 5. Persist only the agents that actually changed
-    await agentRepository.upsertMany(agentsToUpdate.map((r) => r.agent));
+    // Persist blueprints and enriched agents for this batch in parallel
+    await Promise.all([
+      ...batchResults.map(({ agent, derived }) =>
+        kpiRepository.upsert({
+          agentId: agent.id,
+          locationId: agent.locationId,
+          kpis: derived.kpis,
+          generatedAt: derived.kpiGeneratedAt,
+          source: "llm",
+          metadataFingerprint: derived.metadataFingerprint
+        })
+      ),
+      agentRepository.upsertMany(batchResults.map((r) => r.agent))
+    ]);
   }
 
   const allAgents = await agentRepository.findByLocationId(locationId);
@@ -95,11 +96,7 @@ export async function listAgents(
   request: Request,
   response: Response
 ): Promise<void> {
-  const locationId = readLocationId(request);
-
-  if (!locationId) {
-    throw new HttpError(400, "locationId is required");
-  }
+  const locationId = request.locationId;
 
   const agents = await agentRepository.findByLocationId(locationId);
 
@@ -115,11 +112,7 @@ export async function getAgent(
   request: Request,
   response: Response
 ): Promise<void> {
-  const locationId = readLocationId(request);
-
-  if (!locationId) {
-    throw new HttpError(400, "locationId is required");
-  }
+  const locationId = request.locationId;
 
   const agent = await agentRepository.findOne(
     locationId,
@@ -137,11 +130,7 @@ export async function getAgentAnalysis(
   request: Request,
   response: Response
 ): Promise<void> {
-  const locationId = readLocationId(request);
-
-  if (!locationId) {
-    throw new HttpError(400, "locationId is required for agent analysis");
-  }
+  const locationId = request.locationId;
 
   const analysis = await observabilityService.getAgentAnalysis(
     locationId,

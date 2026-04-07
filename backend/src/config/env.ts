@@ -22,6 +22,5 @@ export const env = {
   openaiApiKey: requireEnv("OPENAI_API_KEY"),
   openaiModel: process.env.OPENAI_MODEL || "gpt-4.1-mini",
   openaiApiBaseUrl: process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1",
-  frontendSuccessUrl: process.env.FRONTEND_SUCCESS_URL || "http://localhost:5173/auth/success",
-  frontendFailureUrl: process.env.FRONTEND_FAILURE_URL || "http://localhost:5173/auth/error"
+  jwtSecret: requireEnv("JWT_SECRET", "change-me-in-production"),
 };

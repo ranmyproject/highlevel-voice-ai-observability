@@ -1,67 +1,33 @@
+import { createHmac } from "crypto";
 import type { Request, Response } from "express";
 
 import { env } from "../config/env.js";
 import { authService } from "../services/authService.js";
 
-function buildRedirectUrl(baseUrl: string, params: Record<string, string | undefined>): string {
-  const url = new URL(baseUrl);
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value) {
-      url.searchParams.set(key, value);
-    }
-  }
-
-  return url.toString();
+function createJwt(payload: Record<string, unknown>): string {
+  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+  const body = Buffer.from(JSON.stringify({ ...payload, iat: Math.floor(Date.now() / 1000) })).toString("base64url");
+  const sig = createHmac("sha256", env.jwtSecret).update(`${header}.${body}`).digest("base64url");
+  return `${header}.${body}.${sig}`;
 }
 
-export async function handleHighLevelOAuthCallback(
+export async function exchangeOAuthCode(
   request: Request,
   response: Response
 ): Promise<void> {
-  const code = typeof request.query.code === "string" ? request.query.code : "";
-  const error = typeof request.query.error === "string" ? request.query.error : "";
-
-  console.log(code);
-
-  if (error) {
-    response.redirect(
-      buildRedirectUrl(env.frontendFailureUrl, {
-        error
-      })
-    );
-    return;
-  }
+  const code = typeof request.body.code === "string" ? request.body.code : "";
 
   if (!code) {
-    response.redirect(
-      buildRedirectUrl(env.frontendFailureUrl, {
-        error: "missing_code"
-      })
-    );
+    response.status(400).json({ message: "Missing code" });
     return;
   }
 
-  console.log(code);
+  const tokenRecord = await authService.exchangeCodeForTokens(code);
 
-  try {
-    const tokenRecord = await authService.exchangeCodeForTokens(code);
+  const token = createJwt({
+    locationId: tokenRecord.locationId,
+    companyId: tokenRecord.companyId,
+  });
 
-    response.redirect(
-      buildRedirectUrl(env.frontendSuccessUrl, {
-        locationId: tokenRecord.locationId,
-        companyId: tokenRecord.companyId,
-        status: "connected"
-      })
-    );
-  } catch (callbackError: unknown) {
-    const message =
-      callbackError instanceof Error ? callbackError.message : "oauth_callback_failed";
-
-    response.redirect(
-      buildRedirectUrl(env.frontendFailureUrl, {
-        error: message
-      })
-    );
-  }
+  response.json({ locationId: tokenRecord.locationId, token });
 }
