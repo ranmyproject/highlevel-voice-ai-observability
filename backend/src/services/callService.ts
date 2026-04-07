@@ -306,28 +306,36 @@ class CallService {
       throw new HttpError(400, "No KPI blueprint found for this agent. Sync agents first.");
     }
 
+    return this.evaluateCall(call, agent, blueprint.kpis, resolvedLocationId);
+  }
+
+  private async evaluateCall(
+    call: StoredVoiceCall,
+    agent: StoredAgent,
+    kpis: AgentKpiItem[],
+    resolvedLocationId: string
+  ): Promise<TranscriptEvaluation> {
     const monitor = call.monitor ?? callMonitoringService.evaluateCall(call, agent);
-    await callRepository.writeMonitor(resolvedLocationId, callId, monitor);
+    await callRepository.writeMonitor(resolvedLocationId, call.id, monitor);
     await callMonitorRepository.upsertMany([monitor]);
 
     const transcriptFingerprint = buildTranscriptFingerprint(call);
 
-    // Skip re-evaluation if nothing has changed
-    const existingEvaluation = await callEvaluationRepository.findByCallId(resolvedLocationId, callId);
+    const existingEvaluation = await callEvaluationRepository.findByCallId(resolvedLocationId, call.id);
     if (
       existingEvaluation &&
       existingEvaluation.transcriptFingerprint === transcriptFingerprint &&
       existingEvaluation.agentMetadataFingerprint === agent.metadataFingerprint
     ) {
-      logger.info("CallService", "Using cached evaluation", { callId });
+      logger.info("CallService", "Using cached evaluation", { callId: call.id });
       return existingEvaluation;
     }
 
-    logger.info("CallService", "Running transcript evaluation", { callId, agentId: agent.id });
-    const evaluation = await transcriptEvaluationService.evaluate(call, agent, blueprint.kpis);
+    logger.info("CallService", "Running transcript evaluation", { callId: call.id, agentId: agent.id });
+    const evaluation = await transcriptEvaluationService.evaluate(call, agent, kpis);
     await callEvaluationRepository.upsert(evaluation);
 
-    logger.info("CallService", "analyzeCall completed", { callId });
+    logger.info("CallService", "analyzeCall completed", { callId: call.id });
     return evaluation;
   }
 
@@ -366,7 +374,14 @@ class CallService {
 
     const callsToAnalyze = calls.filter((call) => call.monitor?.shouldAnalyze);
 
+    // Fetch agent context once — shared across all calls in every batch
+    const blueprint = await kpiRepository.findByAgentId(resolvedLocationId, agentId);
+    if (!blueprint || blueprint.kpis.length === 0) {
+      throw new HttpError(400, "No KPI blueprint found for this agent. Sync agents first.");
+    }
+
     // Process in batches of 10 — parallel within each batch, sequential across batches
+    // Each evaluation is saved to DB as soon as it completes inside evaluateCall
     const BATCH_SIZE = 10;
     const evaluations: TranscriptEvaluation[] = [];
 
@@ -378,16 +393,17 @@ class CallService {
         total: callsToAnalyze.length
       });
       const batchResults = await Promise.all(
-        batch.map((call) => this.analyzeCall(call.id, resolvedLocationId))
+        batch.map((call) => this.evaluateCall(call, agent, blueprint.kpis, resolvedLocationId))
       );
       evaluations.push(...batchResults);
     }
 
-    const blueprint = await kpiRepository.findByAgentId(resolvedLocationId, agentId);
-    const storedCalls = await callRepository.findByAgentId(resolvedLocationId, agentId);
-    const storedEvaluations = await callEvaluationRepository.findByAgentId(resolvedLocationId, agentId);
+    const [storedCalls, storedEvaluations] = await Promise.all([
+      callRepository.findByAgentId(resolvedLocationId, agentId),
+      callEvaluationRepository.findByAgentId(resolvedLocationId, agentId)
+    ]);
 
-    const aggregates = computeAggregates(storedEvaluations, storedCalls.length, blueprint?.kpis ?? []);
+    const aggregates = computeAggregates(storedEvaluations, storedCalls.length, blueprint.kpis);
     await agentRepository.setAggregates(resolvedLocationId, agentId, aggregates);
 
     const recommendations =
