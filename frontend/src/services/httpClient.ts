@@ -3,9 +3,6 @@ import { env } from "../config/env";
 function withQuery(path: string, query?: Record<string, any>): string {
   const params = new URLSearchParams();
 
-  // Hardcoded locationId for now
-  params.set("locationId", "Zq2KRWxbuFddOA6Ljo3O");
-
   for (const [key, value] of Object.entries(query || {})) {
     if (value !== undefined && value !== null && value !== "") {
       params.append(key, String(value));
@@ -15,6 +12,11 @@ function withQuery(path: string, query?: Record<string, any>): string {
   const queryStr = params.toString();
   const sep = path.includes("?") ? "&" : "?";
   return `${env.apiBaseUrl}${path}${queryStr ? `${sep}${queryStr}` : ""}`;
+}
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("ghl_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 class HttpClient {
@@ -42,7 +44,7 @@ class HttpClient {
   }
 
   async get<T>(path: string, query?: Record<string, string | undefined>): Promise<T> {
-    const response = await fetch(withQuery(path, query));
+    const response = await fetch(withQuery(path, query), { headers: authHeaders() });
 
     if (!response.ok) {
       return this.readError(response);
@@ -58,7 +60,7 @@ class HttpClient {
   ): Promise<TResponse> {
     const response = await fetch(withQuery(path, query), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(payload)
     });
 

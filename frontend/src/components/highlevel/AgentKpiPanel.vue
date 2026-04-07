@@ -382,7 +382,7 @@ function addCustomKpi(): void {
 
   <!-- KPIs tab -->
   <section v-else class="px-6 py-5">
-    <div class="grid gap-5 lg:grid-cols-[1fr_360px]">
+    <div class="grid gap-5 lg:grid-cols-2">
       <div class="rounded-lg bg-slate-50 p-5">
         <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Tracked KPIs</p>
         <ul class="mt-4 space-y-2">
@@ -399,70 +399,21 @@ function addCustomKpi(): void {
         </ul>
       </div>
 
-      <div class="space-y-5">
-        <div class="rounded-lg bg-slate-50 p-5">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">KPI Issue Rates</p>
-          <div class="mt-3 space-y-2">
-            <div
-              v-for="kpi in displayedKpis"
-              :key="kpi.kpiId"
-              class="rounded-md bg-white px-3 py-2"
-            >
-              <div class="flex items-center justify-between">
-                <span class="text-sm text-slate-600">{{ kpi.kpi }}</span>
-                <span class="text-sm font-semibold" :class="issueRateClass(issueRate(kpi))">
-                  {{ issueRate(kpi) }}% issues
-                </span>
-              </div>
-              <div v-if="kpi.total > 0" class="mt-1.5 flex gap-0.5 overflow-hidden rounded text-xs">
-                <div
-                  v-if="kpi.achieved > 0"
-                  class="bg-emerald-500 py-0.5"
-                  :style="{ width: `${(kpi.achieved / kpi.total) * 100}%` }"
-                  :title="`Achieved: ${kpi.achieved}`"
-                />
-                <div
-                  v-if="kpi.deviated > 0"
-                  class="bg-amber-400 py-0.5"
-                  :style="{ width: `${(kpi.deviated / kpi.total) * 100}%` }"
-                  :title="`Deviated: ${kpi.deviated}`"
-                />
-                <div
-                  v-if="kpi.failed > 0"
-                  class="bg-red-500 py-0.5"
-                  :style="{ width: `${(kpi.failed / kpi.total) * 100}%` }"
-                  :title="`Failed: ${kpi.failed}`"
-                />
-                <div
-                  v-if="kpi.missed > 0"
-                  class="bg-orange-400 py-0.5"
-                  :style="{ width: `${(kpi.missed / kpi.total) * 100}%` }"
-                  :title="`Missed: ${kpi.missed}`"
-                />
-              </div>
-            </div>
-            <p v-if="displayedKpis.length === 0" class="text-sm text-slate-400">
-              Run transcript analysis to see KPI performance.
-            </p>
-          </div>
-        </div>
-
-        <div class="rounded-lg bg-slate-50 p-5">
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Add Manual KPI</p>
-          <div class="mt-3 space-y-2">
-            <textarea
-              v-model="customKpiDraft.kpi"
-              rows="3"
-              placeholder="Plain English statement of what a good call should do or avoid"
-              class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500"
-            />
-            <button
-              class="inline-flex items-center rounded-md bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-              @click="addCustomKpi"
-            >
-              Add KPI
-            </button>
-          </div>
+      <div class="rounded-lg bg-slate-50 p-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Add Manual KPI</p>
+        <div class="mt-3 space-y-2">
+          <textarea
+            v-model="customKpiDraft.kpi"
+            rows="3"
+            placeholder="Plain English statement of what a good call should do or avoid"
+            class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500"
+          />
+          <button
+            class="inline-flex items-center rounded-md bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            @click="addCustomKpi"
+          >
+            Add KPI
+          </button>
         </div>
       </div>
     </div>
