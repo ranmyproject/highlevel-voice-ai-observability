@@ -87,7 +87,7 @@ export function analyzeAgent(
     totalCalls === 0
       ? 1
       : agentTranscripts.filter((item) => !item.issues.includes("missing_required_data")).length /
-        totalCalls;
+      totalCalls;
 
   const issues: AgentIssue[] = agentTranscripts.flatMap((item) =>
     item.issues.map((issueId) => ({

@@ -18,7 +18,7 @@ export const agentRouter = Router();
 agentRouter.get("/", asyncHandler(listAgents));
 agentRouter.post("/sync", asyncHandler(syncAgents));
 agentRouter.get("/:agentId", asyncHandler(getAgent));
-agentRouter.get("/:agentId/analysis", asyncHandler(getAgentAnalysis));
+//agentRouter.get("/:agentId/analysis", asyncHandler(getAgentAnalysis));
 
 // Call-based analysis for specific agents
 agentRouter.post("/:agentId/analyze", asyncHandler(analyzeAgentCalls));

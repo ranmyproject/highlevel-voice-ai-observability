@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { authenticate } from "../middleware/authenticate.js";
+import { extractLocation } from "../middleware/location.js";
 import { agentRouter } from "./agentRoutes.js";
 import { callRouter } from "./callRoutes.js";
 import { dashboardRouter } from "./dashboardRoutes.js";
@@ -15,8 +15,8 @@ apiRouter.use(healthRouter);
 apiRouter.use(oauthRouter);
 apiRouter.use(webhookRouter);
 
-// Protected routes — JWT required
-apiRouter.use(authenticate);
-apiRouter.use(dashboardRouter);
+// Protected routes — locationId required in header
+apiRouter.use(extractLocation);
+// apiRouter.use(dashboardRouter);
 apiRouter.use("/agents", agentRouter);
 apiRouter.use("/calls", callRouter);

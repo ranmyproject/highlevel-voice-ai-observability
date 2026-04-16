@@ -14,9 +14,17 @@ function withQuery(path: string, query?: Record<string, any>): string {
   return `${env.apiBaseUrl}${path}${queryStr ? `${sep}${queryStr}` : ""}`;
 }
 
-function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem("ghl_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
+function locationHeaders(): Record<string, string> {
+  const urlParams = new URLSearchParams(window.location.search);
+  const locationId = urlParams.get("location_id") || localStorage.getItem("ghl_location_id");
+
+  if (locationId) {
+    // Persist it so it's available even if query param is lost on navigation
+    localStorage.setItem("ghl_location_id", locationId);
+    return { "x-location-id": locationId };
+  }
+
+  return {};
 }
 
 class HttpClient {
@@ -44,7 +52,7 @@ class HttpClient {
   }
 
   async get<T>(path: string, query?: Record<string, string | undefined>): Promise<T> {
-    const response = await fetch(withQuery(path, query), { headers: authHeaders() });
+    const response = await fetch(withQuery(path, query), { headers: locationHeaders() });
 
     if (!response.ok) {
       return this.readError(response);
@@ -60,7 +68,7 @@ class HttpClient {
   ): Promise<TResponse> {
     const response = await fetch(withQuery(path, query), {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...locationHeaders() },
       body: JSON.stringify(payload)
     });
 

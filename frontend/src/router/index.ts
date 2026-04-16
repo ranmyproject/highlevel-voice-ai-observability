@@ -44,14 +44,14 @@ const router = createRouter({
 router.beforeEach((to) => {
   if (to.meta.public) return true;
 
-  // If GHL redirected here with a code (e.g. /?code=abc), forward to the callback handler
-  if (to.query.code) {
-    return { name: "auth-callback", query: { code: to.query.code } };
+  const locationId = to.query.location_id || localStorage.getItem("ghl_location_id");
+
+  if (!locationId) {
+    return { name: "error" };
   }
 
-  const token = localStorage.getItem("ghl_token");
-  if (!token) {
-    return { name: "error" };
+  if (to.query.location_id) {
+    localStorage.setItem("ghl_location_id", String(to.query.location_id));
   }
 
   return true;
