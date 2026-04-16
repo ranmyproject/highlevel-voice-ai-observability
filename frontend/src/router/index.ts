@@ -1,15 +1,8 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from "vue-router";
 import AppShell from "../app/AppShell.vue";
-import AuthCallback from "../views/AuthCallback.vue";
 import ErrorPage from "../views/ErrorPage.vue";
 
 const routes = [
-  {
-    path: "/oauth/callback",
-    name: "auth-callback",
-    component: AuthCallback,
-    meta: { public: true }
-  },
   {
     path: "/error",
     name: "error",
