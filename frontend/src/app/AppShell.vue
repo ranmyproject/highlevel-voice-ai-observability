@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import AgentListTable from "../components/highlevel/AgentListTable.vue";
 import AgentDetailPage from "../components/highlevel/AgentDetailPage.vue";
 import TranscriptDetailPage from "../components/highlevel/TranscriptDetailPage.vue";
 import AgentsHeader from "../components/highlevel/AgentsHeader.vue";
 import AgentOverviewBar from "../components/highlevel/AgentOverviewBar.vue";
 import ToolbarRow from "../components/highlevel/ToolbarRow.vue";
-import Navbar from "../components/layout/Navbar.vue";
 import IssuesFeed from "../components/highlevel/IssuesFeed.vue";
 import { useHighLevelVoiceAgents } from "../composables/useHighLevelVoiceAgents";
 
@@ -17,6 +16,13 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
+const route = useRoute();
+
+// Preserve location_id in all navigation so httpClient can always read it from window.location.search
+const locationQuery = computed(() => {
+  const id = route.query.location_id || route.query.locationId || localStorage.getItem("ghl_location_id");
+  return id ? { location_id: id as string } : {};
+});
 
 const {
   loading,
@@ -46,19 +52,19 @@ const {
 const isTranscriptPage = computed(() => Boolean(props.agentId && props.callId && workspace.value));
 
 function selectAgent(agentId: string) {
-  router.push(`/agents/${agentId}`);
+  router.push({ path: `/agents/${agentId}`, query: locationQuery.value });
 }
 
 function backToList() {
-  router.push("/");
+  router.push({ path: "/", query: locationQuery.value });
 }
 
 function backToAgent() {
-  if (props.agentId) router.push(`/agents/${props.agentId}`);
+  if (props.agentId) router.push({ path: `/agents/${props.agentId}`, query: locationQuery.value });
 }
 
 function viewTranscript(callId: string) {
-  if (props.agentId) router.push(`/agents/${props.agentId}/calls/${callId}`);
+  if (props.agentId) router.push({ path: `/agents/${props.agentId}/calls/${callId}`, query: locationQuery.value });
 }
 
 // Sync router params into composable
@@ -110,19 +116,10 @@ watch(error, (val) => {
   if (val) showToast(val, "error");
 });
 
-const navAgentName = computed(() =>
-  isDetailPage.value ? workspace.value?.agent.name : undefined
-);
 </script>
 
 <template>
-  <Navbar
-    active-page="agents"
-    :agent-name="navAgentName"
-    @nav-agents="backToList"
-  />
-
-  <main class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+  <main class="w-full min-h-screen bg-white font-sans text-sm">
     <!-- First-time sync loading -->
     <div v-if="loading && firstTimeSync" class="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div class="flex flex-col items-center justify-center px-6 py-20 text-center">

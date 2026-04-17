@@ -7,8 +7,9 @@ import type {
   AgentKpiItem
 } from "../../types/highlevel";
 import { formatDisplayDate } from "../../utils/format";
+import { observabilityApi } from "../../services/observabilityApi";
 
-type DetailTab = "insights" | "transcripts" | "agent" | "kpis";
+type DetailTab = "insights" | "transcripts" | "kpis";
 
 interface CustomKpiDraft {
   kpi: string;
@@ -29,6 +30,28 @@ defineEmits<{
 const activeTab = ref<DetailTab>("insights");
 const customKpiDraft = ref<CustomKpiDraft>({ kpi: "" });
 const customKpis = ref<CustomKpi[]>([]);
+
+// apply-recommendation state: key = recommendation id
+const applyingId = ref<string | null>(null);
+const applyResult = ref<Record<string, { success: boolean; preview?: string; error?: string }>>({});
+
+async function applyFix(recommendationId: string): Promise<void> {
+  const agentId = props.workspace.agent.id;
+  applyingId.value = recommendationId;
+  delete applyResult.value[recommendationId];
+
+  try {
+    const result = await observabilityApi.applyRecommendation(agentId, recommendationId);
+    applyResult.value[recommendationId] = { success: true, preview: result.updatedPromptPreview };
+  } catch (err: unknown) {
+    applyResult.value[recommendationId] = {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to apply fix"
+    };
+  } finally {
+    applyingId.value = null;
+  }
+}
 
 const sortedCalls = computed(() =>
   [...props.workspace.calls].sort((a, b) => {
@@ -121,31 +144,10 @@ function addCustomKpi(): void {
 </script>
 
 <template>
-  <!-- Agent header -->
+  <!-- Agent header — Redundant when embedded in GHL agent details page so we just show stats directly -->
   <div class="px-6 py-5">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h2 class="text-xl font-semibold text-slate-900">{{ workspace.agent.name }}</h2>
-        <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-          {{ workspace.agent.derivedProfile.primaryGoal }}
-        </p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2 sm:shrink-0">
-        <span :class="healthBadgeClass" class="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium">
-          {{ healthLabel }}
-        </span>
-        <span
-          v-for="channel in workspace.agent.channels"
-          :key="channel"
-          class="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600"
-        >
-          {{ channel }}
-        </span>
-      </div>
-    </div>
-
     <!-- Stats row -->
-    <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <div class="rounded-lg bg-blue-50 px-4 py-3">
         <p class="text-xs text-blue-500">Overall Score</p>
         <p class="mt-1 text-xl font-semibold text-blue-700">
@@ -179,7 +181,6 @@ function addCustomKpi(): void {
       v-for="tab in [
         { id: 'insights', label: 'Insights' },
         { id: 'transcripts', label: 'Transcripts' },
-        { id: 'agent', label: 'Agent Info' },
         { id: 'kpis', label: 'KPIs' }
       ]"
       :key="tab.id"
@@ -235,6 +236,32 @@ function addCustomKpi(): void {
             </div>
             <p class="mt-2 text-sm font-semibold text-slate-800">{{ item.title }}</p>
             <p class="mt-0.5 text-sm leading-5 text-slate-500">{{ item.description }}</p>
+
+            <!-- Apply Fix button (only for prompt-type recommendations) -->
+            <div v-if="item.owner === 'prompt'" class="mt-3">
+              <!-- Success state -->
+              <div v-if="applyResult[item.id]?.success" class="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                <span class="font-semibold">✓ Applied to HighLevel.</span>
+                <span v-if="applyResult[item.id]?.preview" class="ml-1 text-emerald-600 line-clamp-2">{{ applyResult[item.id].preview }}</span>
+              </div>
+              <!-- Error state -->
+              <div v-else-if="applyResult[item.id]?.error" class="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+                ✕ {{ applyResult[item.id].error }}
+              </div>
+              <!-- Button -->
+              <button
+                v-else
+                class="mt-1 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-progress disabled:opacity-60"
+                :disabled="applyingId === item.id"
+                @click="applyFix(item.id)"
+              >
+                <svg v-if="applyingId === item.id" class="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                {{ applyingId === item.id ? "Applying fix…" : "Apply Fix" }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -349,36 +376,6 @@ function addCustomKpi(): void {
     </div>
   </section>
 
-  <!-- Agent Info tab -->
-  <section v-else-if="activeTab === 'agent'" class="px-6 py-5">
-    <div class="grid gap-4 lg:grid-cols-2">
-      <div class="rounded-lg bg-slate-50 p-5">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Primary Goal</p>
-        <p class="mt-2 text-sm leading-6 text-slate-600">{{ workspace.agent.derivedProfile.primaryGoal }}</p>
-      </div>
-
-      <div class="rounded-lg bg-slate-50 p-5">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Success Outcome</p>
-        <p class="mt-2 text-sm leading-6 text-slate-600">{{ workspace.agent.derivedProfile.successOutcome }}</p>
-      </div>
-
-      <div class="rounded-lg bg-slate-50 p-5">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Workflow Stages</p>
-        <ul class="mt-2 list-disc space-y-1.5 pl-4 text-sm leading-6 text-slate-600">
-          <li v-for="stage in workspace.agent.derivedProfile.workflowStages" :key="stage.id">
-            <span class="font-medium text-slate-800">{{ stage.label }}</span>: {{ stage.description }}
-          </li>
-        </ul>
-      </div>
-
-      <div class="rounded-lg bg-slate-50 p-5">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Required Information</p>
-        <ul class="mt-2 list-disc space-y-1.5 pl-4 text-sm leading-6 text-slate-600">
-          <li v-for="item in workspace.agent.derivedProfile.requiredInformation" :key="item">{{ item }}</li>
-        </ul>
-      </div>
-    </div>
-  </section>
 
   <!-- KPIs tab -->
   <section v-else class="px-6 py-5">

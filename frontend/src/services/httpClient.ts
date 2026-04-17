@@ -1,5 +1,7 @@
 import { env } from "../config/env";
 
+export const AUTH_TOKEN_KEY = "ghl_obs_token";
+
 function withQuery(path: string, query?: Record<string, any>): string {
   const params = new URLSearchParams();
 
@@ -14,17 +16,14 @@ function withQuery(path: string, query?: Record<string, any>): string {
   return `${env.apiBaseUrl}${path}${queryStr ? `${sep}${queryStr}` : ""}`;
 }
 
-function locationHeaders(): Record<string, string> {
-  const urlParams = new URLSearchParams(window.location.search);
-  const locationId = urlParams.get("location_id") || localStorage.getItem("ghl_location_id");
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
-  if (locationId) {
-    // Persist it so it's available even if query param is lost on navigation
-    localStorage.setItem("ghl_location_id", locationId);
-    return { "x-location-id": locationId };
+  if (!token) {
+    return {};
   }
 
-  return {};
+  return { Authorization: `Bearer ${token}` };
 }
 
 class HttpClient {
@@ -52,7 +51,7 @@ class HttpClient {
   }
 
   async get<T>(path: string, query?: Record<string, string | undefined>): Promise<T> {
-    const response = await fetch(withQuery(path, query), { headers: locationHeaders() });
+    const response = await fetch(withQuery(path, query), { headers: authHeaders() });
 
     if (!response.ok) {
       return this.readError(response);
@@ -68,7 +67,7 @@ class HttpClient {
   ): Promise<TResponse> {
     const response = await fetch(withQuery(path, query), {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...locationHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(payload)
     });
 

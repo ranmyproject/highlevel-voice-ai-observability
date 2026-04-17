@@ -45,7 +45,7 @@ class AgentService {
   private async requestJson<T>(
     path: string,
     locationId: string,
-    method: "GET" | "POST" | "PUT" = "GET",
+    method: "GET" | "POST" | "PUT" | "PATCH" = "GET",
     bodyPayload?: unknown,
     retry = true
   ): Promise<T> {
@@ -85,9 +85,9 @@ class AgentService {
     if (!response.ok) {
       const body = await response.text();
 
-      if (response.status === 401 && method !== "GET") {
+      if ((response.status === 401 || response.status === 403) && method !== "GET") {
         throw new HttpError(
-          401,
+          response.status,
           `HighLevel rejected the ${method} request for ${path}. This usually means the installed token does not include Voice AI write permissions. Response: ${body}`
         );
       }
@@ -201,6 +201,20 @@ class AgentService {
 
     logger.info("AgentService", "fetchAgents completed", { fetchedCount: validResults.length, locationId });
     return validResults;
+  }
+
+  async patchAgent(
+    locationId: string,
+    agentId: string,
+    body: Record<string, unknown>
+  ): Promise<unknown> {
+    logger.info("AgentService", "patchAgent called", { locationId, agentId, keys: Object.keys(body) });
+    return this.requestJson<unknown>(
+      `/voice-ai/agents/${agentId}`,
+      locationId,
+      "PATCH",
+      body
+    );
   }
 
 }

@@ -5,7 +5,9 @@ import { agentRepository } from "../repositories/agentRepository.js";
 import { kpiRepository } from "../repositories/kpiRepository.js";
 import { agentService } from "../services/agentService.js";
 import { agentKpiDerivationService } from "../services/agentKpiDerivationService.js";
+import { agentSynthesisService } from "../services/agentSynthesisService.js";
 import { observabilityService } from "../services/observabilityService.js";
+import { logger } from "../utils/logger.js";
 import type { StoredAgent } from "../types.js";
 
 const BATCH_SIZE = 10;
@@ -142,3 +144,83 @@ export async function getAgentAnalysis(
   response.json(analysis);
 }
 
+export async function applyRecommendation(
+  request: Request,
+  response: Response
+): Promise<void> {
+  const locationId = request.locationId;
+  const agentId = String(request.params.agentId);
+  const { recommendationId } = request.body as { recommendationId?: string };
+
+  if (!recommendationId) {
+    throw new HttpError(400, "recommendationId is required in request body");
+  }
+
+  // 1. Load the stored agent
+  const agent = await agentRepository.findOne(locationId, agentId);
+  if (!agent) {
+    throw new HttpError(404, "Agent not found");
+  }
+
+  // 2. Find the matching recommendation
+  const recommendation = agent.recommendations?.find((r) => r.id === recommendationId);
+  if (!recommendation) {
+    throw new HttpError(404, `Recommendation "${recommendationId}" not found on this agent`);
+  }
+
+  // 3. Only "prompt" owner recommendations can be auto-applied
+  if (recommendation.owner !== "prompt") {
+    throw new HttpError(
+      400,
+      `Recommendation "${recommendation.title}" is owned by "${recommendation.owner}" — only prompt-type recommendations can be auto-applied via this endpoint`
+    );
+  }
+
+  logger.info("applyRecommendation", "Generating prompt patch", {
+    locationId,
+    agentId,
+    recommendationId,
+  });
+
+  // 4. Use LLM to generate the updated prompt
+  const { promptFieldKey, updatedPrompt } = await agentSynthesisService.generatePromptPatch(
+    agent,
+    recommendation
+  );
+
+  logger.info("applyRecommendation", "Prompt patch generated, pushing to HighLevel", {
+    locationId,
+    agentId,
+    promptFieldKey,
+  });
+
+  // 5. Push to HighLevel via PATCH /voice-ai/agents/:agentId
+  await agentService.patchAgent(locationId, agentId, {
+    [promptFieldKey]: updatedPrompt,
+  });
+
+  // 6. Update the detailPayload locally so future reads reflect the new prompt
+  const updatedDetailPayload = {
+    ...(agent.detailPayload as Record<string, unknown>),
+    [promptFieldKey]: updatedPrompt,
+  } as import("../types.js").AgentDetail;
+
+  await agentRepository.upsertMany([
+    { ...agent, detailPayload: updatedDetailPayload }
+  ]);
+
+  logger.info("applyRecommendation", "Recommendation applied successfully", {
+    locationId,
+    agentId,
+    recommendationId,
+  });
+
+  response.json({
+    success: true,
+    agentId,
+    recommendationId,
+    appliedAt: new Date().toISOString(),
+    promptFieldKey,
+    updatedPromptPreview: updatedPrompt.slice(0, 300) + (updatedPrompt.length > 300 ? "…" : ""),
+  });
+}

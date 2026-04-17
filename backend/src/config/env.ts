@@ -19,8 +19,10 @@ export const env = {
     process.env.HIGHLEVEL_TOKEN_URL || "https://services.leadconnectorhq.com/oauth/token",
   highlevelApiBaseUrl:
     process.env.HIGHLEVEL_API_BASE_URL || "https://services.leadconnectorhq.com",
+  highlevelContextSecret: process.env.HIGHLEVEL_CONTEXT_SECRET,
   openaiApiKey: requireEnv("OPENAI_API_KEY"),
   openaiModel: process.env.OPENAI_MODEL || "gpt-4.1-mini",
   openaiApiBaseUrl: process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1",
   jwtSecret: requireEnv("JWT_SECRET", "change-me-in-production"),
+  frontendUrl: process.env.FRONTEND_URL || "https://vai-observability.vercel.app",
 };

@@ -126,6 +126,7 @@ HIGHLEVEL_CLIENT_SECRET=your_client_secret
 HIGHLEVEL_REDIRECT_URI=https://your-ngrok-url/oauth/callback
 HIGHLEVEL_TOKEN_URL=https://services.leadconnectorhq.com/oauth/token
 HIGHLEVEL_API_BASE_URL=https://services.leadconnectorhq.com
+HIGHLEVEL_CONTEXT_SECRET=your_highlevel_app_context_secret
 
 OPENAI_API_KEY=your_openai_key
 OPENAI_MODEL=gpt-4.1-mini
@@ -208,6 +209,7 @@ Sync Agents  →  Sync Calls  →  Analyze Transcripts  →  Synthesize Insights
 | `GET` | `/calls?locationId=` | List stored calls |
 | `POST` | `/calls/:id/analyze?locationId=` | Evaluate a single call |
 | `GET` | `/oauth/callback` | HighLevel OAuth redirect handler |
+| `POST` | `/auth/highlevel/context` | Verify a signed HighLevel context token and mint an app JWT |
 
 ---
 
@@ -216,6 +218,7 @@ Sync Agents  →  Sync Calls  →  Analyze Transcripts  →  Synthesize Insights
 ### Fully Functional
 
 - **HighLevel OAuth** — full token exchange, automatic refresh, and per-location token storage in MongoDB
+- **HighLevel context auth** — verifies the signed HighLevel context payload and exchanges it for your own short-lived JWT
 - **Agent sync** — live pull from HL Voice AI API including the raw agent script and configured actions
 - **KPI derivation** — LLM reads the agent's live script and derives agent-specific, testable KPIs. SHA-256 fingerprint of the agent metadata prevents redundant re-derivation
 - **Call sync** — live pull with deduplication by call ID

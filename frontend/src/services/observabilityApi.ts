@@ -9,6 +9,10 @@ import type {
 } from "../types/highlevel";
 
 class ObservabilityApi {
+  async verifyLocation(locationId: string): Promise<{ locationId: string; token: string; tokenType: string; expiresIn: number }> {
+    return httpClient.post("/auth/verify", { locationId });
+  }
+
   getDashboard(): Promise<DashboardResponse> {
     return httpClient.get("/dashboard");
   }
@@ -42,6 +46,20 @@ class ObservabilityApi {
     agentId: string
   ): Promise<{ analyzedCount: number; evaluations: TranscriptEvaluation[]; feedbackCycle: AgentFeedbackCycle }> {
     return httpClient.post(`/agents/${agentId}/analyze`, {});
+  }
+
+  applyRecommendation(
+    agentId: string,
+    recommendationId: string
+  ): Promise<{
+    success: boolean;
+    agentId: string;
+    recommendationId: string;
+    appliedAt: string;
+    promptFieldKey: string;
+    updatedPromptPreview: string;
+  }> {
+    return httpClient.post(`/agents/${agentId}/apply-recommendation`, { recommendationId });
   }
 
 }

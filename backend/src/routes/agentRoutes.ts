@@ -4,7 +4,8 @@ import {
   getAgent,
   getAgentAnalysis,
   listAgents,
-  syncAgents
+  syncAgents,
+  applyRecommendation
 } from "../controllers/agentController.js";
 import {
   analyzeAgentCalls,
@@ -24,3 +25,6 @@ agentRouter.get("/:agentId", asyncHandler(getAgent));
 agentRouter.post("/:agentId/analyze", asyncHandler(analyzeAgentCalls));
 agentRouter.get("/:agentId/workspace", asyncHandler(getAgentWorkspace));
 agentRouter.post("/:agentId/synthesize", asyncHandler(synthesizeAgentInsights));
+
+// Apply a prompt-type recommendation directly to the HighLevel agent
+agentRouter.post("/:agentId/apply-recommendation", asyncHandler(applyRecommendation));

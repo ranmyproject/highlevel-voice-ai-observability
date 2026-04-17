@@ -34,7 +34,7 @@ function safeJsonParse<T>(value: string): T | null {
   }
 }
 
-function readAgentScript(agent: StoredAgent): string {
+export function readAgentScript(agent: StoredAgent): string {
   const detail = agent.detailPayload as Record<string, unknown>;
   const candidates = [
     "agentPrompt", "prompt", "systemPrompt", "instructions",
@@ -171,6 +171,71 @@ Never suggest retraining, fine-tuning, or adding training examples.
       basedOnCallCount: aggregates.evaluatedCalls,
       generatedAt: now
     }));
+  }
+  async generatePromptPatch(
+    agent: StoredAgent,
+    recommendation: AgentRecommendation
+  ): Promise<{ promptFieldKey: string; updatedPrompt: string }> {
+    const currentPrompt = readAgentScript(agent);
+
+    if (!currentPrompt) {
+      throw new HttpError(
+        400,
+        "Cannot generate a prompt patch: no existing agent prompt found in the stored agent payload."
+      );
+    }
+
+    const systemMessage = `You are an expert Voice AI prompt engineer. Your task is to improve an existing agent system prompt by incorporating a specific recommendation. You must:
+1. Return the FULL updated prompt — not a diff, not just the added section.
+2. Only add or modify what is directly necessary to address the recommendation.
+3. Preserve all original structure, tone, and instructions.
+4. Do NOT add meta-commentary, only return the prompt text.`;
+
+    const userMessage = `Current Agent Prompt:
+"""
+${currentPrompt}
+"""
+
+Recommendation to apply:
+Title: ${recommendation.title}
+Description: ${recommendation.description}
+
+Return a JSON object with exactly these keys:
+{
+  "promptFieldKey": "agentPrompt",
+  "updatedPrompt": "<the full, updated prompt text>"
+}`;
+
+    const response = await fetch(`${env.openaiApiBaseUrl}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: env.openaiModel,
+        input: `${systemMessage}\n\n${userMessage}`
+      })
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new HttpError(502, `Prompt patch LLM request failed: ${response.status} ${body}`);
+    }
+
+    const rawEnvelope = (await response.json()) as OpenAIResponseEnvelope;
+    const outputText = extractResponseText(rawEnvelope);
+
+    const parsed = safeJsonParse<{ promptFieldKey?: string; updatedPrompt?: string }>(outputText);
+
+    if (!parsed || typeof parsed.updatedPrompt !== "string" || parsed.updatedPrompt.trim().length === 0) {
+      throw new HttpError(502, `Prompt patch LLM returned an unparseable or empty response: ${outputText.slice(0, 200)}`);
+    }
+
+    return {
+      promptFieldKey: parsed.promptFieldKey || "agentPrompt",
+      updatedPrompt: parsed.updatedPrompt.trim()
+    };
   }
 }
 
