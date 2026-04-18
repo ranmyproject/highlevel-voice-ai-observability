@@ -9,8 +9,12 @@ import type {
 } from "../types/highlevel";
 
 class ObservabilityApi {
-  async verifyLocation(locationId: string): Promise<{ locationId: string; token: string; tokenType: string; expiresIn: number }> {
+  verifyLocation(locationId: string): Promise<{ locationId: string; token: string; tokenType: string; expiresIn: number }> {
     return httpClient.post("/auth/verify", { locationId });
+  }
+
+  exchangeOAuthCode(code: string): Promise<{ locationId: string; token: string }> {
+    return httpClient.post("/oauth/exchange", { code });
   }
 
   getDashboard(): Promise<DashboardResponse> {

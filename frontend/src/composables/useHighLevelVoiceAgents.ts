@@ -13,7 +13,6 @@ export function useHighLevelVoiceAgents() {
   const loading = ref(true);
   const firstTimeSync = ref(false);
   const syncingAgents = ref(false);
-  const dashboardIssues = ref<DashboardIssueFeedItem[]>([]);
   const syncingCalls = ref(false);
   const analyzing = ref(false);
   const error = ref("");
@@ -76,17 +75,17 @@ export function useHighLevelVoiceAgents() {
     response.value = await observabilityApi.getHighLevelVoiceAgents();
   }
 
-  async function loadDashboardIssues(): Promise<void> {
-    try {
-      const dashboard = await observabilityApi.getDashboard();
-      dashboardIssues.value = dashboard.issuesFeed || [];
-    } catch {
-      // Issues feed is supplementary — fail silently
-    }
-  }
+
 
   async function loadWorkspace(agentId: string): Promise<void> {
-    workspace.value = await observabilityApi.getHighLevelAgentWorkspace(agentId);
+    try {
+      workspace.value = await observabilityApi.getHighLevelAgentWorkspace(agentId);
+    } catch (err) {
+      console.warn("Failed to load workspace, attempting to sync agents first...", err);
+      // If it fails (e.g. 404 because agent isn't synced locally yet), trigger a sync
+      await syncAgents();
+      workspace.value = await observabilityApi.getHighLevelAgentWorkspace(agentId);
+    }
   }
 
   async function syncAgents(): Promise<void> {
@@ -95,7 +94,6 @@ export function useHighLevelVoiceAgents() {
 
     try {
       response.value = await observabilityApi.syncHighLevelVoiceAgents();
-      if (selectedAgentId.value) await loadWorkspace(selectedAgentId.value);
     } catch (syncError: unknown) {
       error.value = syncError instanceof Error ? syncError.message : "Failed to sync agents";
     } finally {
@@ -158,7 +156,6 @@ export function useHighLevelVoiceAgents() {
 
     try {
       await loadSavedAgents();
-      loadDashboardIssues();
     } catch (loadError: unknown) {
       error.value = loadError instanceof Error ? loadError.message : "Failed to load agents";
     } finally {
@@ -170,7 +167,6 @@ export function useHighLevelVoiceAgents() {
   return {
     loading,
     firstTimeSync,
-    dashboardIssues,
     syncingAgents,
     syncingCalls,
     analyzing,
@@ -191,5 +187,5 @@ export function useHighLevelVoiceAgents() {
     selectAgent,
     backToList,
     setStatusFilter
-  };
+};
 }

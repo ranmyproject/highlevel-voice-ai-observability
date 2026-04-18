@@ -2,10 +2,17 @@ import { createRouter, createWebHistory, type RouteLocationNormalized } from "vu
 import AppShell from "../app/AppShell.vue";
 import ErrorPage from "../views/ErrorPage.vue";
 import InstalledPage from "../views/InstalledPage.vue";
+import OAuthCallback from "../views/OAuthCallback.vue";
 import { AUTH_TOKEN_KEY } from "../services/httpClient";
 import { observabilityApi } from "../services/observabilityApi";
 
 const routes = [
+  {
+    path: "/oauth/callback",
+    name: "oauth-callback",
+    component: OAuthCallback,
+    meta: { public: true }
+  },
   {
     path: "/error",
     name: "error",
@@ -46,7 +53,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   if (to.meta.public) return true;
 
-  const locationId = to.query.location_id || to.query.locationId || localStorage.getItem("ghl_location_id");
+  const locationId = to.query.location_id || to.query.locationId || to.query.locationid || localStorage.getItem("ghl_location_id");
 
   if (!locationId) {
     console.warn("No location_id found in query parameters or localStorage. Redirecting to error page.");
@@ -54,7 +61,7 @@ router.beforeEach((to) => {
   }
 
   // Persist the locationId from query params to localStorage
-  const activeLocationId = (to.query.location_id || to.query.locationId) as string | undefined;
+  const activeLocationId = (to.query.location_id || to.query.locationId || to.query.locationid) as string | undefined;
   if (activeLocationId) {
     localStorage.setItem("ghl_location_id", activeLocationId);
   }

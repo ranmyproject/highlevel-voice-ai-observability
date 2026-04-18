@@ -1,13 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import AgentListTable from "../components/highlevel/AgentListTable.vue";
 import AgentDetailPage from "../components/highlevel/AgentDetailPage.vue";
 import TranscriptDetailPage from "../components/highlevel/TranscriptDetailPage.vue";
-import AgentsHeader from "../components/highlevel/AgentsHeader.vue";
-import AgentOverviewBar from "../components/highlevel/AgentOverviewBar.vue";
-import ToolbarRow from "../components/highlevel/ToolbarRow.vue";
-import IssuesFeed from "../components/highlevel/IssuesFeed.vue";
 import { useHighLevelVoiceAgents } from "../composables/useHighLevelVoiceAgents";
 
 const props = defineProps<{
@@ -20,14 +15,13 @@ const route = useRoute();
 
 // Preserve location_id in all navigation so httpClient can always read it from window.location.search
 const locationQuery = computed(() => {
-  const id = route.query.location_id || route.query.locationId || localStorage.getItem("ghl_location_id");
+  const id = route.query.location_id || route.query.locationId || route.query.locationid || localStorage.getItem("ghl_location_id");
   return id ? { location_id: id as string } : {};
 });
 
 const {
   loading,
   firstTimeSync,
-  dashboardIssues,
   syncingAgents,
   syncingCalls,
   analyzing,
@@ -183,39 +177,15 @@ watch(error, (val) => {
       />
     </template>
 
-    <!-- Agent list -->
+    <!-- Unmatched / Error state -->
     <template v-else>
-      <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div class="px-6 py-6 sm:px-8">
-          <AgentsHeader :syncing-agents="syncingAgents" @sync-agents="syncAgents" />
-
-          <AgentOverviewBar
-            :total-agents="totalAgents"
-            :healthy-agents="healthyAgents"
-            :needs-attention-agents="needsAttentionAgents"
-            :active-filter="statusFilter"
-            @filter-change="setStatusFilter"
-          />
-
-          <ToolbarRow
-            v-if="totalAgents >= 5"
-            v-model="searchQuery"
-            :count="filteredAgents.length"
-            :last-synced-label="lastSyncedLabel"
-            :show-search="true"
-          />
-        </div>
-
-        <IssuesFeed
-          :issues="dashboardIssues"
-          @select-agent="selectAgent"
-        />
-
-        <AgentListTable
-          :agents="filteredAgents"
-          :selected-agent-id="''"
-          @select-agent="selectAgent"
-        />
+      <div v-if="error" class="overflow-hidden rounded-lg border border-red-200 bg-red-50 px-6 py-12 text-center text-red-700">
+        <p class="font-semibold">Unable to load agent observability data</p>
+        <p class="mt-2 text-sm">{{ error }}</p>
+      </div>
+      <div v-else class="overflow-hidden rounded-lg border border-slate-200 bg-white px-6 py-12 text-center text-slate-500">
+        <p class="font-semibold">Agent details not found</p>
+        <p class="mt-2 text-sm">Please verify the URL or ensure the app is installed correctly.</p>
       </div>
     </template>
 
