@@ -19,9 +19,10 @@ onMounted(async () => {
   }
 
   try {
-    const response = await observabilityApi.exchangeOAuthCode(code);
+    const userType = (route.query.companyId && !route.query.locationId) ? "Company" : "Location";
+    const response = await observabilityApi.exchangeOAuthCode(code, userType);
     
-    if (response.locationId) {
+    if (response.locationId || response.companyId) {
       status.value = "success";
       message.value = "Installation complete! Redirecting...";
       
@@ -29,11 +30,16 @@ onMounted(async () => {
       if (response.token) {
         localStorage.setItem("ghl_auth_token", response.token);
       }
-      localStorage.setItem("ghl_location_id", response.locationId);
+      if (response.locationId) {
+        localStorage.setItem("ghl_location_id", response.locationId);
+      }
 
       // Redirect to the success page which will deeply link inside GHL Voice AI
       setTimeout(() => {
-        router.push({ name: "installed", query: { location_id: response.locationId } });
+        router.push({ 
+          name: "installed", 
+          query: response.locationId ? { location_id: response.locationId } : {} 
+        });
       }, 1000);
     } else {
       throw new Error("Invalid response from server.");

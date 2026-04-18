@@ -79,12 +79,12 @@ export function useHighLevelVoiceAgents() {
 
   async function loadWorkspace(agentId: string): Promise<void> {
     try {
-      workspace.value = await observabilityApi.getHighLevelAgentWorkspace(agentId);
+      workspace.value = await observabilityApi.getAgent(agentId);
     } catch (err) {
       console.warn("Failed to load workspace, attempting to sync agents first...", err);
       // If it fails (e.g. 404 because agent isn't synced locally yet), trigger a sync
       await syncAgents();
-      workspace.value = await observabilityApi.getHighLevelAgentWorkspace(agentId);
+      workspace.value = await observabilityApi.getAgent(agentId);
     }
   }
 
@@ -143,6 +143,13 @@ export function useHighLevelVoiceAgents() {
     await loadWorkspace(agentId);
   }
 
+  async function refreshWorkspace(): Promise<void> {
+    if (!selectedAgentId.value) {
+      return;
+    }
+    await loadWorkspace(selectedAgentId.value);
+  }
+
   function backToList(): void {
     selectedAgentId.value = "";
     workspace.value = null;
@@ -185,6 +192,7 @@ export function useHighLevelVoiceAgents() {
     syncCalls,
     analyzeCalls,
     selectAgent,
+    refreshWorkspace,
     backToList,
     setStatusFilter
 };

@@ -4,7 +4,6 @@ import type {
   AgentAggregates,
   AgentFeedbackCycle,
   AgentRecommendation,
-  CallMonitorDecision,
   StoredAgent
 } from "../types.js";
 
@@ -27,16 +26,9 @@ function deriveHealthStatus(aggregates?: AgentAggregates): AgentFeedbackCycle["h
 class AgentFeedbackFlywheelService {
   buildCycle(
     agent: StoredAgent,
-    monitorDecisions: CallMonitorDecision[],
     aggregates: AgentAggregates,
     recommendations: AgentRecommendation[]
   ): AgentFeedbackCycle {
-    const achievedCalls = monitorDecisions.filter((decision) => decision.objectiveStatus === "achieved").length;
-    const failedCalls = monitorDecisions.filter((decision) => decision.objectiveStatus === "failed").length;
-    const uncertainCalls = monitorDecisions.filter((decision) => decision.objectiveStatus === "uncertain").length;
-    const llmAnalyzedCalls = monitorDecisions.filter((decision) => decision.shouldAnalyze).length;
-    const skippedCalls = monitorDecisions.length - llmAnalyzedCalls;
-
     const weakestKpis = [...aggregates.kpiAggregates]
       .map((kpi) => ({
         kpiId: kpi.kpiId,
@@ -60,14 +52,6 @@ class AgentFeedbackFlywheelService {
       generatedAt: new Date().toISOString(),
       summary,
       healthStatus: deriveHealthStatus(aggregates),
-      monitorSummary: {
-        totalCalls: monitorDecisions.length,
-        achievedCalls,
-        failedCalls,
-        uncertainCalls,
-        llmAnalyzedCalls,
-        skippedCalls
-      },
       weakestKpis,
       recommendations,
       nextActions: recommendations.map((recommendation) => recommendation.title)

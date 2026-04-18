@@ -172,33 +172,24 @@ Never suggest retraining, fine-tuning, or adding training examples.
       generatedAt: now
     }));
   }
-  async generatePromptPatch(
-    agent: StoredAgent,
-    recommendation: AgentRecommendation
+  private async requestPromptPatch(
+    currentPrompt: string,
+    recommendationContext: string
   ): Promise<{ promptFieldKey: string; updatedPrompt: string }> {
-    const currentPrompt = readAgentScript(agent);
-
-    if (!currentPrompt) {
-      throw new HttpError(
-        400,
-        "Cannot generate a prompt patch: no existing agent prompt found in the stored agent payload."
-      );
-    }
-
-    const systemMessage = `You are an expert Voice AI prompt engineer. Your task is to improve an existing agent system prompt by incorporating a specific recommendation. You must:
+    const systemMessage = `You are an expert Voice AI prompt engineer. Your task is to improve an existing agent system prompt by incorporating recommendation(s). You must:
 1. Return the FULL updated prompt — not a diff, not just the added section.
-2. Only add or modify what is directly necessary to address the recommendation.
+2. Only add or modify what is directly necessary to address the recommendation(s).
 3. Preserve all original structure, tone, and instructions.
-4. Do NOT add meta-commentary, only return the prompt text.`;
+4. Resolve conflicts sensibly if recommendations overlap.
+5. Do NOT add meta-commentary, only return the prompt text.`;
 
     const userMessage = `Current Agent Prompt:
 """
 ${currentPrompt}
 """
 
-Recommendation to apply:
-Title: ${recommendation.title}
-Description: ${recommendation.description}
+Recommendation(s) to apply:
+${recommendationContext}
 
 Return a JSON object with exactly these keys:
 {
@@ -225,7 +216,6 @@ Return a JSON object with exactly these keys:
 
     const rawEnvelope = (await response.json()) as OpenAIResponseEnvelope;
     const outputText = extractResponseText(rawEnvelope);
-
     const parsed = safeJsonParse<{ promptFieldKey?: string; updatedPrompt?: string }>(outputText);
 
     if (!parsed || typeof parsed.updatedPrompt !== "string" || parsed.updatedPrompt.trim().length === 0) {
@@ -236,6 +226,50 @@ Return a JSON object with exactly these keys:
       promptFieldKey: parsed.promptFieldKey || "agentPrompt",
       updatedPrompt: parsed.updatedPrompt.trim()
     };
+  }
+
+  async generatePromptPatch(
+    agent: StoredAgent,
+    recommendation: AgentRecommendation
+  ): Promise<{ promptFieldKey: string; updatedPrompt: string }> {
+    const currentPrompt = readAgentScript(agent);
+
+    if (!currentPrompt) {
+      throw new HttpError(
+        400,
+        "Cannot generate a prompt patch: no existing agent prompt found in the stored agent payload."
+      );
+    }
+
+    const recommendationContext = `1. Title: ${recommendation.title}\nDescription: ${recommendation.description}`;
+    return this.requestPromptPatch(currentPrompt, recommendationContext);
+  }
+
+  async generatePromptPatchForRecommendations(
+    agent: StoredAgent,
+    recommendations: AgentRecommendation[]
+  ): Promise<{ promptFieldKey: string; updatedPrompt: string }> {
+    const currentPrompt = readAgentScript(agent);
+
+    if (!currentPrompt) {
+      throw new HttpError(
+        400,
+        "Cannot generate a prompt patch: no existing agent prompt found in the stored agent payload."
+      );
+    }
+
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      throw new HttpError(400, "At least one recommendation is required to generate a prompt patch.");
+    }
+
+    const recommendationContext = recommendations
+      .map(
+        (recommendation, index) =>
+          `${index + 1}. Title: ${recommendation.title}\nDescription: ${recommendation.description}`
+      )
+      .join("\n\n");
+
+    return this.requestPromptPatch(currentPrompt, recommendationContext);
   }
 }
 

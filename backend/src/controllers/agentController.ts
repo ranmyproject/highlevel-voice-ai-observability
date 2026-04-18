@@ -2,11 +2,13 @@ import type { Request, Response } from "express";
 
 import { HttpError } from "../errors/HttpError.js";
 import { agentRepository } from "../repositories/agentRepository.js";
+import { agentFeedbackCycleRepository } from "../repositories/agentFeedbackCycleRepository.js";
 import { kpiRepository } from "../repositories/kpiRepository.js";
 import { agentService } from "../services/agentService.js";
 import { agentKpiDerivationService } from "../services/agentKpiDerivationService.js";
 import { agentSynthesisService } from "../services/agentSynthesisService.js";
 import { observabilityService } from "../services/observabilityService.js";
+import { callService } from "../services/callService.js";
 import { logger } from "../utils/logger.js";
 import type { StoredAgent } from "../types.js";
 
@@ -112,18 +114,11 @@ export async function getAgent(
   request: Request,
   response: Response
 ): Promise<void> {
-  const locationId = request.locationId;
-
-  const agent = await agentRepository.findOne(
-    locationId,
-    String(request.params.agentId)
+  const result = await callService.buildAgentWorkspace(
+    String(request.params.agentId),
+    request.locationId
   );
-
-  if (!agent) {
-    throw new HttpError(404, "Agent not found");
-  }
-
-  response.json(agent);
+  response.json(result);
 }
 
 export async function getAgentAnalysis(
@@ -144,83 +139,186 @@ export async function getAgentAnalysis(
   response.json(analysis);
 }
 
-export async function applyRecommendation(
-  request: Request,
-  response: Response
-): Promise<void> {
-  const locationId = request.locationId;
-  const agentId = String(request.params.agentId);
-  const { recommendationId } = request.body as { recommendationId?: string };
-
-  if (!recommendationId) {
-    throw new HttpError(400, "recommendationId is required in request body");
+function normalizeRecommendationIds(body: unknown): string[] {
+  if (!body || typeof body !== "object") {
+    return [];
   }
 
-  // 1. Load the stored agent
+  const payload = body as { recommendationId?: unknown; recommendationIds?: unknown };
+  const idsFromArray = Array.isArray(payload.recommendationIds)
+    ? payload.recommendationIds
+        .filter((id): id is string => typeof id === "string")
+        .map((id) => id.trim())
+        .filter(Boolean)
+    : [];
+  const ids =
+    idsFromArray.length > 0
+      ? idsFromArray
+      : typeof payload.recommendationId === "string" && payload.recommendationId.trim().length > 0
+        ? [payload.recommendationId.trim()]
+        : [];
+
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      deduped.push(id);
+    }
+  }
+  return deduped;
+}
+
+interface ApplyRecommendationsResult {
+  success: true;
+  agentId: string;
+  appliedAt: string;
+  appliedCount: number;
+  appliedRecommendationIds: string[];
+  remainingRecommendationCount: number;
+  promptFieldKey: string;
+  updatedPromptPreview: string;
+  refreshRecommended: boolean;
+}
+
+async function applyPromptRecommendations(
+  locationId: string,
+  agentId: string,
+  recommendationIds: string[]
+): Promise<ApplyRecommendationsResult> {
+  if (recommendationIds.length === 0) {
+    throw new HttpError(400, "recommendationIds is required in request body");
+  }
+
   const agent = await agentRepository.findOne(locationId, agentId);
   if (!agent) {
     throw new HttpError(404, "Agent not found");
   }
 
-  // 2. Find the matching recommendation
-  const recommendation = agent.recommendations?.find((r) => r.id === recommendationId);
-  if (!recommendation) {
-    throw new HttpError(404, `Recommendation "${recommendationId}" not found on this agent`);
+  const allRecommendations = agent.recommendations || [];
+  if (allRecommendations.length === 0) {
+    throw new HttpError(404, "No recommendations found on this agent");
   }
 
-  // 3. Only "prompt" owner recommendations can be auto-applied
-  if (recommendation.owner !== "prompt") {
-    throw new HttpError(
-      400,
-      `Recommendation "${recommendation.title}" is owned by "${recommendation.owner}" — only prompt-type recommendations can be auto-applied via this endpoint`
-    );
+  const recommendationsById = new Map(allRecommendations.map((recommendation) => [recommendation.id, recommendation]));
+  const missingIds = recommendationIds.filter((id) => !recommendationsById.has(id));
+  if (missingIds.length > 0) {
+    throw new HttpError(404, `Recommendation(s) not found on this agent: ${missingIds.join(", ")}`);
   }
 
-  logger.info("applyRecommendation", "Generating prompt patch", {
+  const selectedRecommendations = recommendationIds.map((id) => recommendationsById.get(id)!);
+  const nonPromptRecommendations = selectedRecommendations.filter((recommendation) => recommendation.owner !== "prompt");
+  if (nonPromptRecommendations.length > 0) {
+    const details = nonPromptRecommendations
+      .map((recommendation) => `"${recommendation.title}" (${recommendation.owner})`)
+      .join(", ");
+    throw new HttpError(400, `Only prompt recommendations can be auto-applied. Invalid selection: ${details}`);
+  }
+
+  logger.info("applyRecommendations", "Generating prompt patch for selected recommendations", {
     locationId,
     agentId,
-    recommendationId,
+    recommendationCount: selectedRecommendations.length,
+    recommendationIds,
   });
 
-  // 4. Use LLM to generate the updated prompt
-  const { promptFieldKey, updatedPrompt } = await agentSynthesisService.generatePromptPatch(
+  const { promptFieldKey, updatedPrompt } = await agentSynthesisService.generatePromptPatchForRecommendations(
     agent,
-    recommendation
+    selectedRecommendations
   );
 
-  logger.info("applyRecommendation", "Prompt patch generated, pushing to HighLevel", {
+  logger.info("applyRecommendations", "Prompt patch generated, pushing to HighLevel", {
     locationId,
     agentId,
     promptFieldKey,
   });
 
-  // 5. Push to HighLevel via PATCH /voice-ai/agents/:agentId
   await agentService.patchAgent(locationId, agentId, {
     [promptFieldKey]: updatedPrompt,
   });
 
-  // 6. Update the detailPayload locally so future reads reflect the new prompt
+  const appliedAt = new Date().toISOString();
+  const selectedIdSet = new Set(recommendationIds);
+  const remainingRecommendations = allRecommendations.filter((recommendation) => !selectedIdSet.has(recommendation.id));
+  const updatedLatestFeedbackCycle = agent.latestFeedbackCycle
+    ? {
+        ...agent.latestFeedbackCycle,
+        recommendations: remainingRecommendations,
+        nextActions: remainingRecommendations.map((recommendation) => recommendation.title)
+      }
+    : undefined;
+
   const updatedDetailPayload = {
     ...(agent.detailPayload as Record<string, unknown>),
     [promptFieldKey]: updatedPrompt,
   } as import("../types.js").AgentDetail;
 
   await agentRepository.upsertMany([
-    { ...agent, detailPayload: updatedDetailPayload }
+    {
+      ...agent,
+      detailPayload: updatedDetailPayload,
+      recommendations: remainingRecommendations,
+      latestFeedbackCycle: updatedLatestFeedbackCycle,
+      lastPromptUpdateAt: appliedAt,
+      lastAppliedRecommendationIds: recommendationIds,
+    }
   ]);
 
-  logger.info("applyRecommendation", "Recommendation applied successfully", {
+  if (updatedLatestFeedbackCycle) {
+    await agentFeedbackCycleRepository.upsert(updatedLatestFeedbackCycle);
+  }
+
+  logger.info("applyRecommendations", "Recommendations applied successfully", {
     locationId,
     agentId,
-    recommendationId,
+    recommendationCount: recommendationIds.length,
+    recommendationIds,
   });
 
-  response.json({
+  return {
     success: true,
     agentId,
-    recommendationId,
-    appliedAt: new Date().toISOString(),
+    appliedAt,
+    appliedCount: recommendationIds.length,
+    appliedRecommendationIds: recommendationIds,
+    remainingRecommendationCount: remainingRecommendations.length,
     promptFieldKey,
     updatedPromptPreview: updatedPrompt.slice(0, 300) + (updatedPrompt.length > 300 ? "…" : ""),
+    refreshRecommended: true,
+  };
+}
+
+export async function applyRecommendation(
+  request: Request,
+  response: Response
+): Promise<void> {
+  const locationId = request.locationId;
+  const agentId = String(request.params.agentId);
+  const recommendationIds = normalizeRecommendationIds(request.body);
+
+  if (recommendationIds.length !== 1) {
+    throw new HttpError(400, "recommendationId is required in request body");
+  }
+
+  const result = await applyPromptRecommendations(locationId, agentId, recommendationIds);
+  response.json({
+    ...result,
+    recommendationId: recommendationIds[0],
   });
+}
+
+export async function applyRecommendations(
+  request: Request,
+  response: Response
+): Promise<void> {
+  const locationId = request.locationId;
+  const agentId = String(request.params.agentId);
+  const recommendationIds = normalizeRecommendationIds(request.body);
+
+  if (recommendationIds.length === 0) {
+    throw new HttpError(400, "recommendationIds is required in request body");
+  }
+
+  const result = await applyPromptRecommendations(locationId, agentId, recommendationIds);
+  response.json(result);
 }

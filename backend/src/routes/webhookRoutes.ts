@@ -5,7 +5,4 @@ import { asyncHandler } from "../handlers/asyncHandler.js";
 
 export const webhookRouter = Router();
 
-webhookRouter.post(
-  "/webhooks/highlevel/app-install",
-  asyncHandler(handleAppInstallWebhook)
-);
+webhookRouter.post("/", asyncHandler(handleAppInstallWebhook));

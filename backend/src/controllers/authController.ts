@@ -1,9 +1,7 @@
 import type { Request, Response } from "express";
-
 import { HttpError } from "../errors/HttpError.js";
-import { tokenRepository } from "../repositories/tokenRepository.js";
+import { authService } from "../services/authService.js";
 import { contextAuthService } from "../services/contextAuthService.js";
-import { logger } from "../utils/logger.js";
 
 function readContextToken(body: Record<string, unknown>): string {
   const locationId = body.locationId;
@@ -21,12 +19,9 @@ export async function verifyHighLevelLocation(
 ): Promise<void> {
   const locationId = readContextToken(request.body as Record<string, unknown>);
 
-  const tokenRecord = await tokenRepository.findByLocationId(locationId);
-
-  if (!tokenRecord) {
-    logger.warn("verifyHighLevelLocation", "No stored token record found for location", { locationId });
-    throw new HttpError(404, "Unknown locationId");
-  }
+  // Use the high-level auth service to get a valid token.
+  // This will automatically handle Agency -> Location token generation and discovery.
+  const tokenRecord = await authService.getValidToken(locationId);
 
   const appToken = contextAuthService.issueAppJwt({
     locationId,

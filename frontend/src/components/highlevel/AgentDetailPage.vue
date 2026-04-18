@@ -13,6 +13,7 @@ defineEmits<{
   syncCalls: [];
   analyze: [];
   viewTranscript: [callId: string];
+  recommendationsApplied: [];
 }>();
 </script>
 
@@ -45,6 +46,7 @@ defineEmits<{
     <AgentKpiPanel
       :workspace="workspace"
       @view-transcript="$emit('viewTranscript', $event)"
+      @recommendations-applied="$emit('recommendationsApplied')"
     />
   </div>
 </template>

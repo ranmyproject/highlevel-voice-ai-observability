@@ -280,6 +280,8 @@ export interface StoredAgent {
   aggregates?: AgentAggregates;
   recommendations?: AgentRecommendation[];
   latestFeedbackCycle?: AgentFeedbackCycle;
+  lastPromptUpdateAt?: string;
+  lastAppliedRecommendationIds?: string[];
   listPayload: AgentListItem;
   detailPayload: AgentDetail;
   syncedAt: string;
@@ -326,7 +328,6 @@ export interface StoredVoiceCall {
   listPayload: VoiceCall;
   detailPayload: VoiceCallDetail;
   syncedAt: string;
-  monitor?: CallMonitorDecision;
 }
 
 export interface VoiceCallListResponse {
@@ -394,38 +395,6 @@ export interface AgentRecommendation {
   generatedAt: string;
 }
 
-export interface CallMonitorSignal {
-  id: string;
-  label: string;
-  type: "success" | "failure" | "uncertainty";
-  source: "summary" | "transcript" | "extracted_data" | "duration" | "status" | "action";
-  weight: number;
-  matched: boolean;
-  evidence?: string;
-}
-
-export interface CallMonitorDecision {
-  callId: string;
-  locationId: string;
-  agentId: string;
-  evaluatedAt: string;
-  objectiveStatus: "achieved" | "failed" | "uncertain";
-  shouldAnalyze: boolean;
-  analyzeReason:
-  | "objective_failed"
-  | "objective_uncertain"
-  | "qa_sample"
-  | "skipped_high_confidence_success";
-  successScore: number;
-  failureScore: number;
-  uncertaintyScore: number;
-  confidence: number;
-  matchedSignals: CallMonitorSignal[];
-  expectedActions: string[];
-  missingRequirements: string[];
-  notes: string[];
-}
-
 export interface AgentFeedbackCycle {
   id: string;
   agentId: string;
@@ -433,14 +402,6 @@ export interface AgentFeedbackCycle {
   generatedAt: string;
   summary: string;
   healthStatus: "healthy" | "needs_attention" | "at_risk" | "insufficient_data";
-  monitorSummary: {
-    totalCalls: number;
-    achievedCalls: number;
-    failedCalls: number;
-    uncertainCalls: number;
-    llmAnalyzedCalls: number;
-    skippedCalls: number;
-  };
   weakestKpis: Array<{
     kpiId: string;
     kpi: string;

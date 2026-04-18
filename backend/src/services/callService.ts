@@ -4,7 +4,6 @@ import { callRepository } from "../repositories/callRepository.js";
 import { agentRepository } from "../repositories/agentRepository.js";
 import { kpiRepository } from "../repositories/kpiRepository.js";
 import { callEvaluationRepository } from "../repositories/callEvaluationRepository.js";
-import { callMonitorRepository } from "../repositories/callMonitorRepository.js";
 import { agentFeedbackCycleRepository } from "../repositories/agentFeedbackCycleRepository.js";
 import { authService } from "./authService.js";
 import {
@@ -12,7 +11,6 @@ import {
   transcriptEvaluationService
 } from "./transcriptEvaluationService.js";
 import { agentSynthesisService } from "./agentSynthesisService.js";
-import { callMonitoringService } from "./callMonitoringService.js";
 import { agentFeedbackFlywheelService } from "./agentFeedbackFlywheelService.js";
 import { logger } from "../utils/logger.js";
 import type {
@@ -302,10 +300,6 @@ class CallService {
     kpis: AgentKpiItem[],
     resolvedLocationId: string
   ): Promise<TranscriptEvaluation> {
-    const monitor = call.monitor ?? callMonitoringService.evaluateCall(call, agent);
-    await callRepository.writeMonitor(resolvedLocationId, call.id, monitor);
-    await callMonitorRepository.upsertMany([monitor]);
-
     const transcriptFingerprint = buildTranscriptFingerprint(call);
 
     const existingEvaluation = await callEvaluationRepository.findByCallId(resolvedLocationId, call.id);
@@ -339,20 +333,7 @@ class CallService {
 
     if (!agent) throw new HttpError(404, "Stored HighLevel agent not found");
 
-    const monitorDecisions = calls.map((call) => {
-      const decision = call.monitor ?? callMonitoringService.evaluateCall(call, agent);
-      call.monitor = decision;
-      return decision;
-    });
-
-    await callMonitorRepository.upsertMany(monitorDecisions);
-    await Promise.all(
-      monitorDecisions.map((decision) =>
-        callRepository.writeMonitor(locationId, decision.callId, decision)
-      )
-    );
-
-    const callsToAnalyze = calls.filter((call) => call.monitor?.shouldAnalyze);
+    const callsToAnalyze = calls;
 
     // Fetch agent context once — shared across all calls in every batch
     const blueprint = await kpiRepository.findByAgentId(locationId, agentId);
@@ -392,7 +373,6 @@ class CallService {
 
     const feedbackCycle = agentFeedbackFlywheelService.buildCycle(
       { ...agent, aggregates, recommendations },
-      monitorDecisions,
       aggregates,
       recommendations
     );
@@ -417,10 +397,8 @@ class CallService {
     const recommendations = await agentSynthesisService.synthesize(agent, agent.aggregates);
     await agentRepository.setRecommendations(locationId, agentId, recommendations);
 
-    const monitors = await callMonitorRepository.findByAgentId(locationId, agentId);
     const feedbackCycle = agentFeedbackFlywheelService.buildCycle(
       { ...agent, recommendations },
-      monitors,
       agent.aggregates,
       recommendations
     );

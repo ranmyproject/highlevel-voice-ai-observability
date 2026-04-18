@@ -3,6 +3,10 @@ import { computed, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import AgentDetailPage from "../components/highlevel/AgentDetailPage.vue";
 import TranscriptDetailPage from "../components/highlevel/TranscriptDetailPage.vue";
+import AgentListTable from "../components/highlevel/AgentListTable.vue";
+import AgentsHeader from "../components/highlevel/AgentsHeader.vue";
+import AgentOverviewBar from "../components/highlevel/AgentOverviewBar.vue";
+import ToolbarRow from "../components/highlevel/ToolbarRow.vue";
 import { useHighLevelVoiceAgents } from "../composables/useHighLevelVoiceAgents";
 
 const props = defineProps<{
@@ -39,6 +43,7 @@ const {
   syncCalls,
   analyzeCalls,
   selectAgent: internalSelectAgent,
+  refreshWorkspace,
   backToList: internalBackToList,
   setStatusFilter
 } = useHighLevelVoiceAgents();
@@ -59,6 +64,11 @@ function backToAgent() {
 
 function viewTranscript(callId: string) {
   if (props.agentId) router.push({ path: `/agents/${props.agentId}/calls/${callId}`, query: locationQuery.value });
+}
+
+async function handleRecommendationsApplied() {
+  await refreshWorkspace();
+  showToast("Applied selected fixes and refreshed agent insights");
 }
 
 // Sync router params into composable
@@ -174,16 +184,49 @@ watch(error, (val) => {
         @sync-calls="syncCalls"
         @analyze="analyzeCalls"
         @view-transcript="viewTranscript"
+        @recommendations-applied="handleRecommendationsApplied"
       />
+    </template>
+
+    <!-- Home / Dashboard View -->
+    <template v-else-if="!isDetailPage && !isTranscriptPage">
+      <div v-if="error" class="mb-4 overflow-hidden rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <p class="font-semibold">Unable to load agent observability data</p>
+        <p class="mt-1">{{ error }}</p>
+      </div>
+
+      <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div class="px-6 py-6 sm:px-8">
+          <AgentsHeader :syncing-agents="syncingAgents" @sync-agents="syncAgents" />
+
+          <AgentOverviewBar
+            :total-agents="totalAgents"
+            :healthy-agents="healthyAgents"
+            :needs-attention-agents="needsAttentionAgents"
+            :active-filter="statusFilter"
+            @filter-change="setStatusFilter"
+          />
+
+          <ToolbarRow
+            v-if="totalAgents >= 5"
+            v-model="searchQuery"
+            :count="filteredAgents.length"
+            :last-synced-label="lastSyncedLabel"
+            :show-search="true"
+          />
+        </div>
+
+        <AgentListTable
+          :agents="filteredAgents"
+          :selected-agent-id="''"
+          @select-agent="selectAgent"
+        />
+      </div>
     </template>
 
     <!-- Unmatched / Error state -->
     <template v-else>
-      <div v-if="error" class="overflow-hidden rounded-lg border border-red-200 bg-red-50 px-6 py-12 text-center text-red-700">
-        <p class="font-semibold">Unable to load agent observability data</p>
-        <p class="mt-2 text-sm">{{ error }}</p>
-      </div>
-      <div v-else class="overflow-hidden rounded-lg border border-slate-200 bg-white px-6 py-12 text-center text-slate-500">
+      <div class="overflow-hidden rounded-lg border border-slate-200 bg-white px-6 py-12 text-center text-slate-500">
         <p class="font-semibold">Agent details not found</p>
         <p class="mt-2 text-sm">Please verify the URL or ensure the app is installed correctly.</p>
       </div>

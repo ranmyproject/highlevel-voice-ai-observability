@@ -31,6 +31,14 @@ class HttpClient {
     const contentType = response.headers.get("content-type") || "";
     let message = `Request failed with status ${response.status}`;
 
+    // Handle session expiry (401)
+    if (response.status === 401) {
+      console.warn("Session expired (401). Clearing token.");
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      // If we are in an iframe, we want to reload with current query params to trigger router re-auth
+      window.location.reload();
+    }
+
     try {
       if (contentType.includes("application/json")) {
         const payload = (await response.json()) as { message?: string };

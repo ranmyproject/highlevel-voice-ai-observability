@@ -1,7 +1,7 @@
 import type { Collection } from "mongodb";
 
 import { getDatabase } from "../config/database.js";
-import type { CallMonitorDecision, StoredVoiceCall } from "../types.js";
+import type { StoredVoiceCall } from "../types.js";
 
 class CallRepository {
   private async getCollection(): Promise<Collection<StoredVoiceCall>> {
@@ -57,11 +57,6 @@ class CallRepository {
       .find({ locationId, id: { $in: ids } }, { projection: { _id: 0, id: 1 } })
       .toArray();
     return new Set(docs.map((d) => d.id));
-  }
-
-  async writeMonitor(locationId: string, callId: string, monitor: CallMonitorDecision): Promise<void> {
-    const collection = await this.getCollection();
-    await collection.updateOne({ locationId, id: callId }, { $set: { monitor } });
   }
 }
 

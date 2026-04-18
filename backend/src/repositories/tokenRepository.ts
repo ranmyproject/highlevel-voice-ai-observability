@@ -37,11 +37,35 @@ class HighLevelTokenRepository {
     );
   }
 
+  async findByCompanyId(companyId: string): Promise<InstallationTokenRecord | null> {
+    const collection = await this.getCollection();
+
+    return collection.findOne(
+      { companyId },
+      {
+        projection: { _id: 0 },
+        sort: { updatedAt: -1 } // In case they refreshed or have multiple tokens
+      }
+    );
+  }
+
   async findLatest(): Promise<InstallationTokenRecord | null> {
     const collection = await this.getCollection();
 
     return collection.findOne(
       {},
+      {
+        projection: { _id: 0 },
+        sort: { updatedAt: -1 }
+      }
+    );
+  }
+
+  async findLatestAgencyToken(): Promise<InstallationTokenRecord | null> {
+    const collection = await this.getCollection();
+
+    return collection.findOne(
+      { userType: "Company" },
       {
         projection: { _id: 0 },
         sort: { updatedAt: -1 }

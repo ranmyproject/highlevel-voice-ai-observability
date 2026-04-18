@@ -14,50 +14,24 @@ export async function exchangeOAuthCode(
   response: Response
 ): Promise<void> {
   const code = typeof request.body.code === "string" ? request.body.code : "";
+  const userType = typeof request.body.userType === "string" ? request.body.userType : "Location";
 
   if (!code) {
     response.status(400).json({ message: "Missing code" });
     return;
   }
 
-  const tokenRecord = await authService.exchangeCodeForTokens(code);
+  const tokenRecord = await authService.exchangeCodeForTokens(code, userType);
 
   const token = signJwt({
     locationId: tokenRecord.locationId,
     companyId: tokenRecord.companyId,
   }, env.jwtSecret, 60 * 60 * 24);
 
-  response.json({ locationId: tokenRecord.locationId, token });
+  response.json({
+    locationId: tokenRecord.locationId || "",
+    companyId: tokenRecord.companyId || "",
+    token
+  });
 }
 
-/**
- * GET /oauth/callback
- * GHL redirects here with ?code=...&locationId=... after the user installs the app.
- * We exchange the code, store the token, then redirect the browser to the
- * frontend /installed page which shows a success message and deep-links into GHL.
- */
-export async function oauthCallback(
-  request: Request,
-  response: Response
-): Promise<void> {
-  const code = typeof request.query.code === "string" ? request.query.code : "";
-
-  if (!code) {
-    logger.warn("oauthCallback", "No code in callback query", { query: request.query });
-    response.status(400).send("Missing OAuth code");
-    return;
-  }
-
-  logger.info("oauthCallback", "Received OAuth callback from GHL, exchanging code");
-
-  const tokenRecord = await authService.exchangeCodeForTokens(code);
-  const locationId = tokenRecord.locationId ?? "";
-
-  logger.info("oauthCallback", "Token stored, redirecting to installed page", { locationId });
-
-  // Redirect to the frontend success page — it will then deep-link into GHL
-  const frontendBase = env.frontendUrl;
-  const redirect = `${frontendBase}/installed${locationId ? `?location_id=${locationId}` : ""}`;
-
-  response.redirect(302, redirect);
-}

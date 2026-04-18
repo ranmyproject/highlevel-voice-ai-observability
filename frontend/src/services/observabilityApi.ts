@@ -13,15 +13,15 @@ class ObservabilityApi {
     return httpClient.post("/auth/verify", { locationId });
   }
 
-  exchangeOAuthCode(code: string): Promise<{ locationId: string; token: string }> {
-    return httpClient.post("/oauth/exchange", { code });
+  exchangeOAuthCode(code: string, userType: string = "Location"): Promise<{ locationId: string; companyId: string; token: string }> {
+    return httpClient.post("/oauth/exchange", { code, userType });
   }
 
   getDashboard(): Promise<DashboardResponse> {
     return httpClient.get("/dashboard");
   }
 
-  getAgent(agentId: string): Promise<AgentDetailResponse> {
+  getAgent(agentId: string): Promise<AgentAnalysisWorkspace> {
     return httpClient.get(`/agents/${agentId}`);
   }
 
@@ -37,10 +37,6 @@ class ObservabilityApi {
     return httpClient.post("/agents/sync", {});
   }
 
-  getHighLevelAgentWorkspace(agentId: string): Promise<AgentAnalysisWorkspace> {
-    return httpClient.get(`/agents/${agentId}/workspace`);
-  }
-
   syncHighLevelVoiceCalls(agentId?: string): Promise<HighLevelVoiceCallListResponse> {
     const qs = agentId ? `?agentId=${agentId}` : "";
     return httpClient.post(`/calls/sync${qs}`, {});
@@ -52,6 +48,23 @@ class ObservabilityApi {
     return httpClient.post(`/agents/${agentId}/analyze`, {});
   }
 
+  applyRecommendations(
+    agentId: string,
+    recommendationIds: string[]
+  ): Promise<{
+    success: boolean;
+    agentId: string;
+    appliedAt: string;
+    appliedCount: number;
+    appliedRecommendationIds: string[];
+    remainingRecommendationCount: number;
+    promptFieldKey: string;
+    updatedPromptPreview: string;
+    refreshRecommended: boolean;
+  }> {
+    return httpClient.post(`/agents/${agentId}/apply-recommendations`, { recommendationIds });
+  }
+
   applyRecommendation(
     agentId: string,
     recommendationId: string
@@ -60,12 +73,15 @@ class ObservabilityApi {
     agentId: string;
     recommendationId: string;
     appliedAt: string;
+    appliedCount: number;
+    appliedRecommendationIds: string[];
+    remainingRecommendationCount: number;
     promptFieldKey: string;
     updatedPromptPreview: string;
+    refreshRecommended: boolean;
   }> {
     return httpClient.post(`/agents/${agentId}/apply-recommendation`, { recommendationId });
   }
-
 }
 
 export const observabilityApi = new ObservabilityApi();

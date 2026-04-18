@@ -34,6 +34,16 @@ class AppInstallationRepository {
 
     return record;
   }
+
+  async findByLocationId(locationId: string): Promise<AppInstallationRecord | null> {
+    const collection = await this.getCollection();
+    return collection.findOne({ locationId }, { projection: { _id: 0 } });
+  }
+
+  async findByCompanyId(companyId: string): Promise<AppInstallationRecord | null> {
+    const collection = await this.getCollection();
+    return collection.findOne({ companyId }, { projection: { _id: 0 } });
+  }
 }
 
 export const appInstallationRepository = new AppInstallationRepository();

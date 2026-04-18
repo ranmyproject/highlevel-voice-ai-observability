@@ -3,10 +3,7 @@ import type { Request, Response } from "express";
 import { HttpError } from "../errors/HttpError.js";
 import { observabilityService } from "../services/observabilityService.js";
 import { callService } from "../services/callService.js";
-import { agentRepository } from "../repositories/agentRepository.js";
 import { callRepository } from "../repositories/callRepository.js";
-import { callMonitorRepository } from "../repositories/callMonitorRepository.js";
-import { callMonitoringService } from "../services/callMonitoringService.js";
 import type { IngestTranscriptRequestBody } from "../types.js";
 
 function readAgentId(request: Request): string | undefined {
@@ -43,20 +40,7 @@ export async function syncCalls(
   const newCalls = fetchedCalls.filter((c) => !existingIds.has(c.id));
 
   if (newCalls.length > 0) {
-    const agent = await agentRepository.findOne(locationId, agentId);
-
-
-    if (agent) {
-      const monitorDecisions = newCalls.map((call) => {
-        const decision = callMonitoringService.evaluateCall(call, agent);
-        call.monitor = decision;
-        return decision;
-      });
-      await callRepository.upsertMany(newCalls);
-      await callMonitorRepository.upsertMany(monitorDecisions);
-    } else {
-      await callRepository.upsertMany(newCalls);
-    }
+    await callRepository.upsertMany(newCalls);
   }
 
   response.json({

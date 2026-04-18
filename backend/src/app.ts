@@ -9,7 +9,11 @@ export function createApp() {
 
   app.use(cors());
   app.use(express.json());
-  app.use("/", apiRouter);
+
+  // Mount all API routes under /api
+  // Webhooks, OAuth, and Auth verification are public inside apiRouter
+  app.use("/api", apiRouter);
+
   app.use(errorHandler);
 
   return app;

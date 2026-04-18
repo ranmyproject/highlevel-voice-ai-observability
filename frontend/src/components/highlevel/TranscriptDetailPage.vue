@@ -26,8 +26,6 @@ const evaluation = computed(() =>
   props.workspace.evaluations.find((e) => e.callId === props.callId) ?? null
 );
 
-const monitor = computed(() => call.value?.monitor ?? null);
-
 function formatDuration(sec: number): string {
   if (sec < 60) return `${sec}s`;
   const m = Math.floor(sec / 60);
@@ -40,13 +38,6 @@ const scoreBadgeClass = computed(() => {
   if (score >= 80) return "text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200";
   if (score >= 60) return "text-amber-700 bg-amber-50 ring-1 ring-amber-200";
   return "text-red-700 bg-red-50 ring-1 ring-red-200";
-});
-
-const monitorBadgeClass = computed(() => {
-  const status = monitor.value?.objectiveStatus;
-  if (status === "achieved") return "text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200";
-  if (status === "failed") return "text-red-700 bg-red-50 ring-1 ring-red-200";
-  return "text-amber-700 bg-amber-50 ring-1 ring-amber-200";
 });
 
 function statusBadgeClass(status: KpiStatus): string {
@@ -132,13 +123,6 @@ function callEndTypeBadgeClass(t: CallEndType): string {
             >
               {{ callEndTypeLabel(evaluation.callEndType) }}
             </span>
-            <span
-              v-if="monitor"
-              :class="monitorBadgeClass"
-              class="inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium"
-            >
-              {{ monitor.objectiveStatus }}
-            </span>
             <span class="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
               {{ formatDuration(call.durationSec) }}
             </span>
@@ -218,21 +202,8 @@ function callEndTypeBadgeClass(t: CallEndType): string {
             </div>
           </div>
 
-          <!-- Monitor + Human Followups -->
+          <!-- Human Followups -->
           <div class="space-y-4">
-            <div class="rounded-lg border border-slate-200 p-5">
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Monitor Gate</p>
-              <p class="mt-2 text-sm text-slate-700">
-                {{ monitor?.shouldAnalyze ? "Sent to LLM for analysis" : "Skipped — high confidence success" }}
-              </p>
-              <ul v-if="monitor?.notes?.length" class="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-500">
-                <li v-for="note in monitor.notes" :key="note">{{ note }}</li>
-              </ul>
-              <p v-if="monitor?.missingRequirements?.length" class="mt-2 text-sm text-slate-500">
-                Missing: {{ monitor.missingRequirements.join(", ") }}
-              </p>
-            </div>
-
             <div
               v-if="evaluation.kpiResults.some((r) => r.humanFollowup)"
               class="rounded-lg border border-red-200 bg-red-50 p-5"
