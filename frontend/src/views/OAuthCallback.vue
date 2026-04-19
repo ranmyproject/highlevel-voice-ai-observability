@@ -24,7 +24,7 @@ onMounted(async () => {
     
     if (response.locationId || response.companyId) {
       status.value = "success";
-      message.value = "Installation complete! Redirecting...";
+      message.value = "Installation complete. Opening setup instructions...";
       
       // Store the token and location ID locally
       if (response.token) {

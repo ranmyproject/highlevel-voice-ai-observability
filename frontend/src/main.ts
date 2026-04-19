@@ -3,6 +3,9 @@ import router from "./router/index";
 
 import App from "./App.vue";
 import "./styles.css";
+import { installIframeAuthBridge } from "./services/iframeAuthBridge";
+
+installIframeAuthBridge();
 
 const app = createApp(App);
 app.use(router);

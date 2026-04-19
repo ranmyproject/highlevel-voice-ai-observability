@@ -3,7 +3,6 @@ import { computed, ref, watch } from "vue";
 
 import type {
   AgentAnalysisWorkspace,
-  AgentKpiAggregate,
   AgentKpiItem
 } from "../../types/highlevel";
 import { formatDisplayDate } from "../../utils/format";
@@ -45,7 +44,6 @@ const sortedCalls = computed(() =>
   })
 );
 
-const feedbackCycle = computed(() => props.workspace.agent.latestFeedbackCycle || null);
 const aggregates = computed(() => props.workspace.agent.aggregates || null);
 const lastPromptUpdateLabel = computed(() =>
   props.workspace.agent.lastPromptUpdateAt
@@ -59,17 +57,6 @@ const analysisIsStaleAfterPromptUpdate = computed(() => {
   if (!lastEvaluatedAt) return true;
   return new Date(updatedAt).getTime() > new Date(lastEvaluatedAt).getTime();
 });
-
-// Sort by highest issue rate (most problems first)
-const displayedKpis = computed<AgentKpiAggregate[]>(() =>
-  aggregates.value?.kpiAggregates
-    ? [...aggregates.value.kpiAggregates].sort((a, b) => {
-        const aIssueRate = a.total > 0 ? (a.deviated + a.failed + a.missed) / a.total : 0;
-        const bIssueRate = b.total > 0 ? (b.deviated + b.failed + b.missed) / b.total : 0;
-        return bIssueRate - aIssueRate;
-      })
-    : []
-);
 
 const topActions = computed(() => props.workspace.agent.recommendations || []);
 const promptActions = computed(() => topActions.value.filter((item) => item.owner === "prompt"));
@@ -165,32 +152,6 @@ const combinedKpis = computed<AgentKpiItem[]>(() => {
   return [...blueprintKpis, ...manualKpis];
 });
 
-const healthBadgeClass = computed(() => {
-  const health = feedbackCycle.value?.healthStatus;
-  if (health === "healthy") return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
-  if (health === "needs_attention") return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
-  if (health === "at_risk") return "bg-red-50 text-red-700 ring-1 ring-red-200";
-  return "bg-slate-100 text-slate-500 ring-1 ring-slate-200";
-});
-
-const healthLabel = computed(() => {
-  const health = feedbackCycle.value?.healthStatus;
-  if (health === "healthy") return "Healthy";
-  if (health === "needs_attention") return "Needs attention";
-  if (health === "at_risk") return "At risk";
-  return "No data";
-});
-
-function issueRate(kpi: AgentKpiAggregate): number {
-  return kpi.total > 0 ? Math.round(((kpi.deviated + kpi.failed + kpi.missed) / kpi.total) * 100) : 0;
-}
-
-function issueRateClass(rate: number): string {
-  if (rate <= 20) return "text-emerald-600";
-  if (rate <= 50) return "text-amber-600";
-  return "text-red-600";
-}
-
 function priorityBadgeClass(priority: string): string {
   if (priority === "high") return "bg-red-100 text-red-700";
   if (priority === "medium") return "bg-amber-100 text-amber-700";
@@ -284,7 +245,7 @@ function addCustomKpi(): void {
       Prompt was updated on {{ lastPromptUpdateLabel }}. Sync and analyze new calls to refresh KPI trends and recommendations.
     </div>
 
-    <div class="grid gap-5 lg:grid-cols-[1fr_340px]">
+    <div>
 
       <!-- Recommendations -->
       <div>
@@ -386,128 +347,8 @@ function addCustomKpi(): void {
         </div>
       </div>
 
-      <!-- KPI breakdown -->
-      <div>
-        <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">KPI Performance</p>
-
-        <div v-if="displayedKpis.length === 0" class="rounded-lg bg-slate-50 px-5 py-8 text-center text-sm text-slate-400">
-          Run transcript analysis to see KPI performance.
-        </div>
-
-        <div v-else class="space-y-3">
-          <div
-            v-for="kpi in displayedKpis"
-            :key="kpi.kpiId"
-            class="rounded-lg bg-slate-50 p-4"
-          >
-            <div class="flex items-start justify-between gap-2">
-              <p class="text-sm leading-5 text-slate-700">{{ kpi.kpi }}</p>
-              <span
-                class="shrink-0 text-sm font-bold"
-                :class="issueRateClass(issueRate(kpi))"
-              >{{ issueRate(kpi) }}%</span>
-            </div>
-
-            <!-- Stacked bar -->
-            <div v-if="kpi.total > 0" class="mt-2.5 flex h-1.5 overflow-hidden rounded-full">
-              <div
-                v-if="kpi.achieved > 0"
-                class="bg-emerald-400"
-                :style="{ width: `${(kpi.achieved / kpi.total) * 100}%` }"
-              />
-              <div
-                v-if="kpi.deviated > 0"
-                class="bg-amber-400"
-                :style="{ width: `${(kpi.deviated / kpi.total) * 100}%` }"
-              />
-              <div
-                v-if="kpi.failed > 0"
-                class="bg-red-400"
-                :style="{ width: `${(kpi.failed / kpi.total) * 100}%` }"
-              />
-              <div
-                v-if="kpi.missed > 0"
-                class="bg-orange-300"
-                :style="{ width: `${(kpi.missed / kpi.total) * 100}%` }"
-              />
-            </div>
-
-            <!-- Count pills -->
-            <div class="mt-2 flex flex-wrap gap-1.5">
-              <span v-if="kpi.achieved > 0" class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                ✓ {{ kpi.achieved }} achieved
-              </span>
-              <span v-if="kpi.deviated > 0" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                ~ {{ kpi.deviated }} deviated
-              </span>
-              <span v-if="kpi.failed > 0" class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                ✕ {{ kpi.failed }} failed
-              </span>
-              <span v-if="kpi.missed > 0" class="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
-                — {{ kpi.missed }} missed
-              </span>
-              <span class="ml-auto text-xs text-slate-400">{{ kpi.total }} calls</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
     </div>
   </section>
-
-  <!-- Confirmation modal for prompt updates -->
-  <div
-    v-if="showApplyConfirmation"
-    class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/45 px-4"
-    @click.self="closeApplyConfirmation"
-  >
-    <div class="w-full max-w-xl rounded-xl bg-white p-5 shadow-2xl ring-1 ring-slate-200">
-      <p class="text-base font-semibold text-slate-900">Confirm Prompt Update</p>
-      <p class="mt-2 text-sm leading-5 text-slate-600">
-        This will immediately update the live HighLevel agent prompt using the selected recommendations.
-      </p>
-
-      <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Selected Prompt Fixes ({{ selectedPromptRecommendations.length }})
-        </p>
-        <ul class="mt-2 max-h-44 space-y-1 overflow-y-auto pr-1 text-sm text-slate-700">
-          <li
-            v-for="item in selectedPromptRecommendations"
-            :key="item.id"
-            class="rounded-md bg-white px-2.5 py-1.5 ring-1 ring-slate-200"
-          >
-            {{ item.title }}
-          </li>
-        </ul>
-      </div>
-
-      <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-        This action affects only prompt-owned recommendations. QA and Operations items remain manual actions.
-      </div>
-
-      <div class="mt-5 flex justify-end gap-2">
-        <button
-          class="rounded-md border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="applyingSelection"
-          @click="closeApplyConfirmation"
-        >
-          Cancel
-        </button>
-        <button
-          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-progress disabled:opacity-60"
-          :disabled="applyingSelection"
-          @click="applySelectedPromptFixes"
-        >
-          <svg v-if="applyingSelection" class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          {{ applyingSelection ? "Applying…" : "Confirm & Apply" }}
-        </button>
-      </div>
-    </div>
-  </div>
 
   <!-- Transcripts tab -->
   <section v-else-if="activeTab === 'transcripts'" class="px-6 py-5">
@@ -585,4 +426,58 @@ function addCustomKpi(): void {
       </div>
     </div>
   </section>
+
+  <!-- Confirmation modal for prompt updates -->
+  <div
+    v-if="showApplyConfirmation"
+    class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/45 px-4"
+    @click.self="closeApplyConfirmation"
+  >
+    <div class="w-full max-w-xl rounded-xl bg-white p-5 shadow-2xl ring-1 ring-slate-200">
+      <p class="text-base font-semibold text-slate-900">Confirm Prompt Update</p>
+      <p class="mt-2 text-sm leading-5 text-slate-600">
+        This will immediately update the live HighLevel agent prompt using the selected recommendations.
+      </p>
+
+      <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Selected Prompt Fixes ({{ selectedPromptRecommendations.length }})
+        </p>
+        <ul class="mt-2 max-h-44 space-y-1 overflow-y-auto pr-1 text-sm text-slate-700">
+          <li
+            v-for="item in selectedPromptRecommendations"
+            :key="item.id"
+            class="rounded-md bg-white px-2.5 py-1.5 ring-1 ring-slate-200"
+          >
+            {{ item.title }}
+          </li>
+        </ul>
+      </div>
+
+      <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        This action affects only prompt-owned recommendations. QA and Operations items remain manual actions.
+      </div>
+
+      <div class="mt-5 flex justify-end gap-2">
+        <button
+          class="rounded-md border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="applyingSelection"
+          @click="closeApplyConfirmation"
+        >
+          Cancel
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-progress disabled:opacity-60"
+          :disabled="applyingSelection"
+          @click="applySelectedPromptFixes"
+        >
+          <svg v-if="applyingSelection" class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          {{ applyingSelection ? "Applying…" : "Confirm & Apply" }}
+        </button>
+      </div>
+    </div>
+  </div>
 </template>

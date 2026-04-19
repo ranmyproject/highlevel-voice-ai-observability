@@ -11,6 +11,7 @@ import { formatRelativeSyncTime } from "../utils/format";
 
 export function useHighLevelVoiceAgents() {
   const loading = ref(true);
+  const loadingWorkspace = ref(false);
   const firstTimeSync = ref(false);
   const syncingAgents = ref(false);
   const syncingCalls = ref(false);
@@ -78,6 +79,7 @@ export function useHighLevelVoiceAgents() {
 
 
   async function loadWorkspace(agentId: string): Promise<void> {
+    loadingWorkspace.value = true;
     try {
       workspace.value = await observabilityApi.getAgent(agentId);
     } catch (err) {
@@ -85,6 +87,8 @@ export function useHighLevelVoiceAgents() {
       // If it fails (e.g. 404 because agent isn't synced locally yet), trigger a sync
       await syncAgents();
       workspace.value = await observabilityApi.getAgent(agentId);
+    } finally {
+      loadingWorkspace.value = false;
     }
   }
 
@@ -173,6 +177,7 @@ export function useHighLevelVoiceAgents() {
 
   return {
     loading,
+    loadingWorkspace,
     firstTimeSync,
     syncingAgents,
     syncingCalls,

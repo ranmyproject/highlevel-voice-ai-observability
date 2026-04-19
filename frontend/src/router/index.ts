@@ -6,6 +6,7 @@ import OAuthCallback from "../views/OAuthCallback.vue";
 import LoginPage from "../views/LoginPage.vue";
 import { AUTH_TOKEN_KEY } from "../services/httpClient";
 import { observabilityApi } from "../services/observabilityApi";
+import { requestAuthFromParent } from "../services/iframeAuthBridge";
 
 const routes = [
   {
@@ -84,6 +85,15 @@ router.beforeEach(async (to) => {
   // If we have a valid token, we're good
   if (token) {
     return true;
+  }
+
+  // Embedded iframe mode: ask parent (GHL custom JS) for a token via postMessage
+  const receivedFromParent = await requestAuthFromParent(1500);
+  if (receivedFromParent) {
+    token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (token && !isTokenExpired(token)) {
+      return true;
+    }
   }
 
   // If no token, we NEED a locationId to get one

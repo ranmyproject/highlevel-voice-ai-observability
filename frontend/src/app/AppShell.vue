@@ -25,6 +25,7 @@ const locationQuery = computed(() => {
 
 const {
   loading,
+  loadingWorkspace,
   firstTimeSync,
   syncingAgents,
   syncingCalls,
@@ -49,6 +50,7 @@ const {
 } = useHighLevelVoiceAgents();
 
 const isTranscriptPage = computed(() => Boolean(props.agentId && props.callId && workspace.value));
+const isWorkspaceRoute = computed(() => Boolean(props.agentId));
 
 function selectAgent(agentId: string) {
   router.push({ path: `/agents/${agentId}`, query: locationQuery.value });
@@ -172,6 +174,28 @@ watch(error, (val) => {
         :call-id="callId"
         @back="backToAgent"
       />
+    </template>
+
+    <!-- Agent workspace loading -->
+    <template v-else-if="isWorkspaceRoute && loadingWorkspace">
+      <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div class="flex flex-col items-center justify-center px-6 py-20 text-center">
+          <div class="relative mb-6 flex h-16 w-16 items-center justify-center">
+            <div class="absolute h-16 w-16 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
+            <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <p class="text-base font-semibold text-slate-800">Loading agent observability</p>
+          <p class="mt-1.5 max-w-md text-sm text-slate-500">
+            We're fetching this Voice AI agent from HighLevel and preparing its KPI workspace. On the first load, this can take a few extra seconds.
+          </p>
+          <div class="mt-6 flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-xs font-medium text-blue-700">
+            <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+            Pulling agent details and observability context…
+          </div>
+        </div>
+      </div>
     </template>
 
     <!-- Agent detail page -->

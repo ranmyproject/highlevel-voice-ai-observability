@@ -85,8 +85,9 @@ function callEndTypeBadgeClass(t: CallEndType): string {
         class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-slate-800"
         @click="$emit('back')"
       >
-        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.75 19.25 3.5 12l7.25-7.25" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 12h16.5" />
         </svg>
         Back to {{ agent.name }}
       </button>
