@@ -8,6 +8,27 @@ import type {
 } from "../types.js";
 
 class HighLevelAuthService {
+  private async assertInstallationActive(locationId: string, companyId?: string): Promise<void> {
+    const locationInstall = await appInstallationRepository.findByLocationId(locationId);
+
+    if (locationInstall?.status === "uninstalled") {
+      throw new Error("HighLevel app is uninstalled for this location");
+    }
+
+    if (locationInstall?.status === "installed") {
+      return;
+    }
+
+    if (!companyId) {
+      return;
+    }
+
+    const companyInstall = await appInstallationRepository.findByCompanyId(companyId);
+    if (companyInstall?.status === "uninstalled") {
+      throw new Error("HighLevel app is uninstalled for this location");
+    }
+  }
+
   private async exchangeToken(
     payload: Record<string, string>
   ): Promise<OAuthTokenResponse> {
@@ -109,6 +130,10 @@ class HighLevelAuthService {
   async getValidToken(locationId?: string): Promise<InstallationTokenRecord> {
     logger.debug("HighLevelAuthService", "getValidToken called", { locationId });
 
+    if (locationId) {
+      await this.assertInstallationActive(locationId);
+    }
+
     let tokenRecord = locationId ? await tokenRepository.findByLocationId(locationId) : await tokenRepository.findLatest();
 
     if (!tokenRecord && locationId) {
@@ -170,7 +195,12 @@ class HighLevelAuthService {
     // IF token is an Agency/Company Token AND we are requesting a specific Location ID,
     // we MUST downgrade it to a Location Token via the /oauth/locationToken endpoint!
     if (tokenRecord.companyId && !tokenRecord.locationId && locationId) {
+      await this.assertInstallationActive(locationId, tokenRecord.companyId);
       return this.exchangeCompanyForLocationToken(tokenRecord, locationId);
+    }
+
+    if (locationId) {
+      await this.assertInstallationActive(locationId, tokenRecord.companyId);
     }
 
     return tokenRecord;

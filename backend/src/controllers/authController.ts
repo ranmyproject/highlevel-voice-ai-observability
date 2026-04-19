@@ -21,7 +21,18 @@ export async function verifyHighLevelLocation(
 
   // Use the high-level auth service to get a valid token.
   // This will automatically handle Agency -> Location token generation and discovery.
-  const tokenRecord = await authService.getValidToken(locationId);
+  let tokenRecord;
+  try {
+    tokenRecord = await authService.getValidToken(locationId);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("No HighLevel installation token found")) {
+      throw new HttpError(401, "No HighLevel installation token found");
+    }
+    if (error instanceof Error && error.message.includes("uninstalled")) {
+      throw new HttpError(401, "App is not installed for this location");
+    }
+    throw error;
+  }
 
   const appToken = contextAuthService.issueAppJwt({
     locationId,

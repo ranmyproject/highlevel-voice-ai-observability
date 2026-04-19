@@ -37,12 +37,12 @@ class AppInstallationRepository {
 
   async findByLocationId(locationId: string): Promise<AppInstallationRecord | null> {
     const collection = await this.getCollection();
-    return collection.findOne({ locationId }, { projection: { _id: 0 } });
+    return collection.findOne({ locationId }, { projection: { _id: 0 }, sort: { updatedAt: -1 } });
   }
 
   async findByCompanyId(companyId: string): Promise<AppInstallationRecord | null> {
     const collection = await this.getCollection();
-    return collection.findOne({ companyId }, { projection: { _id: 0 } });
+    return collection.findOne({ companyId }, { projection: { _id: 0 }, sort: { updatedAt: -1 } });
   }
 }
 

@@ -154,7 +154,7 @@ export interface WhitelabelDetails {
 }
 
 export interface AppInstallWebhookPayload {
-  type: "INSTALL";
+  type: "INSTALL" | "UNINSTALL";
   appId: string;
   companyId?: string;
   locationId?: string;
@@ -178,9 +178,10 @@ export interface AppInstallationRecord {
   trial?: TrialDetails;
   installationScope: "location" | "agency";
   source: "highlevel_app_install_webhook";
-  status: "installed";
+  status: "installed" | "uninstalled";
   rawPayload: AppInstallWebhookPayload;
   installedAt: string;
+  uninstalledAt?: string;
   updatedAt: string;
 }
 

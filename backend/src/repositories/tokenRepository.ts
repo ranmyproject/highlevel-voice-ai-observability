@@ -72,6 +72,16 @@ class HighLevelTokenRepository {
       }
     );
   }
+
+  async deleteByLocationId(locationId: string): Promise<void> {
+    const collection = await this.getCollection();
+    await collection.deleteMany({ locationId });
+  }
+
+  async deleteByCompanyId(companyId: string): Promise<void> {
+    const collection = await this.getCollection();
+    await collection.deleteMany({ companyId });
+  }
 }
 
 export const tokenRepository = new HighLevelTokenRepository();
