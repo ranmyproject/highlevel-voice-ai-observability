@@ -187,6 +187,37 @@ Update `HIGHLEVEL_REDIRECT_URI` in `.env` and in your HL Marketplace app setting
 6. The iframe app stores the JWT in `localStorage` under `ghl_obs_token` and uses it for all backend API calls
 7. If the app is uninstalled, `/auth/verify` returns `401`, the token is cleared, and the tab is not shown
 
+### Custom JS Responsibilities
+
+The HighLevel Custom JS is the parent-shell bootstrap for the embedded app. It is responsible for:
+
+- detecting when the user is on a Voice AI agent detail route inside HighLevel
+- reading the current HighLevel `locationId`
+- calling `/auth/verify` to confirm the app is installed for that location
+- injecting the `Observability` tab only after backend verification succeeds
+- rendering the Vue app inside an iframe on tab click
+- passing the short-lived app JWT and `locationId` into the iframe via `postMessage`
+- responding to iframe auth requests after initial load
+- removing or hiding the tab when verification fails or the app has been uninstalled
+
+This keeps the install check in the parent HighLevel context, while the iframe app stays focused on the observability UI and authenticated backend API calls.
+
+For this assignment build, the initial auth bootstrap is intentionally simplified: the parent Custom JS sends only the current `locationId` to `POST /auth/verify`, and the backend issues the app JWT if that location has an active installation record. In a production implementation, this initial verification should use HighLevel's signed payload / signed context so the backend can cryptographically verify that the request genuinely originated from the HighLevel parent context, instead of trusting the `locationId` alone.
+
+### Parent → Iframe Auth Handshake
+
+```text
+HighLevel Agent Detail Page
+  └─ Custom JS boots
+      ├─ get current locationId
+      ├─ POST /auth/verify { locationId }
+      ├─ if valid: inject Observability tab
+      ├─ user opens tab
+      ├─ parent renders iframe: /agents/:agentId
+      ├─ parent postMessage({ token, locationId })
+      └─ iframe stores token as ghl_obs_token and starts API requests
+```
+
 ---
 
 ## Usage Workflow
