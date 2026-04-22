@@ -164,8 +164,8 @@ Never suggest retraining, fine-tuning, or adding training examples.
           : "medium",
       owner:
         item.owner === "prompt" ||
-        item.owner === "operations" ||
-        item.owner === "qa"
+          item.owner === "operations" ||
+          item.owner === "qa"
           ? item.owner
           : "prompt",
       basedOnCallCount: aggregates.evaluatedCalls,
